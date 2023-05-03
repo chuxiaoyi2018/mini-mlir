@@ -1,0 +1,25 @@
+pytorch1.13.1:¾
+†
+x1/Relu"Relu2ð/usr/local/lib/python3.7/dist-packages/torch/nn/functional.py(1457): relu
+relu.py(9): forward
+/usr/local/lib/python3.7/dist-packages/torch/nn/modules/module.py(1182): _slow_forward
+/usr/local/lib/python3.7/dist-packages/torch/nn/modules/module.py(1194): _call_impl
+/usr/local/lib/python3.7/dist-packages/torch/jit/_trace.py(118): wrapper
+/usr/local/lib/python3.7/dist-packages/torch/jit/_trace.py(132): forward
+/usr/local/lib/python3.7/dist-packages/torch/nn/modules/module.py(1194): _call_impl
+/usr/local/lib/python3.7/dist-packages/torch/jit/_trace.py(1184): _get_trace_graph
+/usr/local/lib/python3.7/dist-packages/torch/onnx/utils.py(896): _trace_and_get_graph_from_model
+/usr/local/lib/python3.7/dist-packages/torch/onnx/utils.py(987): _create_jit_graph
+/usr/local/lib/python3.7/dist-packages/torch/onnx/utils.py(1111): _model_to_graph
+/usr/local/lib/python3.7/dist-packages/torch/onnx/utils.py(1539): _export
+/usr/local/lib/python3.7/dist-packages/torch/onnx/utils.py(519): export
+relu.py(21): <module>
+	torch_jitZ
+x
+
+
+Hb
+1
+
+
+HB
