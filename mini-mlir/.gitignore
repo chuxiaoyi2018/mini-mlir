@@ -7,4 +7,6 @@ __pycache__
 dist
 build
 
+*.npz
+*.cmake
 *.onnx
