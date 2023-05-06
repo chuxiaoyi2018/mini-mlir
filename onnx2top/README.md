@@ -14,6 +14,10 @@ sh build_third_party.sh
 ```
 
 run these command to check
+
+if you cannot "import mlir"
+
+you may run step2 ahead
 ```
 python3
 >>> import mlir 
