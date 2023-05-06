@@ -1,0 +1,83 @@
+// =============================================================================
+//
+// Defines TOPS Dialect operations.
+//
+//===----------------------------------------------------------------------===//
+
+#ifndef TOPS_OPS
+#define TOPS_OPS
+
+include "mlir/IR/OpBase.td"
+include "mlir/Interfaces/SideEffectInterfaces.td"
+include "sophgo/Interfaces/InferenceInterface.td"
+
+def Tops_Dialect : Dialect {
+  let name = "tops";
+  let summary = "A tops dialect for the SOPHGO specification";
+  let cppNamespace = "::mlir::tops";
+}
+
+def AnyTensorOrNone: AnyTypeOf<[AnyTensor, NoneType]>;
+
+class Tops_Op<string mnemonic, list<Trait> traits = []> :
+    Op<Tops_Dialect, mnemonic, traits> ;
+
+def Tops_NoneOp : Tops_Op<"None", [Pure]> {
+  let summary = "none operator";
+
+  let description = [{
+    A none Op to return a NoneType.
+  }];
+  let results = (outs NoneType);
+}
+
+def Tops_WeightOp : Tops_Op<"Weight", [Pure]> {
+  let summary = "load weight operator";
+
+  let description = [{
+    Load weight from a file. The file should be a valid .npy format file.
+    This Op does not take any input, and the attribute captures the file name.
+    The Output is an n-dimensional tensor whose type matches
+    the tensor type in the .npy file.
+  }];
+
+  let arguments = (
+    StrAttr:$name
+  );
+
+  let results = (outs AnyTensor:$output);
+}
+
+def Tops_InputOp: Tops_Op<"Input",[Pure]> {
+  let summary = "Input operator";
+
+  let description = [{
+  }];
+
+  let arguments = (
+    ins AnyTensor:$input,
+    StrAttr:$name
+  );
+
+  let results = (outs AnyTensor:$output);
+}
+
+def Tops_ReluOp: Tops_Op<"Relu", [Pure,
+  DeclareOpInterfaceMethods<InferenceInterface,["init","deinit"]>]> {
+  let summary = "Relu operator";
+
+  let description = [{
+     ReLU with a scalar maximum value. if limit is zero, do not use upper limit.
+  }];
+
+  let arguments = (
+    ins AnyTensor:$input,
+    DefaultValuedAttr<F64Attr, "-1.0">:$relu_limit
+  );
+
+  let results = (outs AnyTensor:$output);
+
+  //let hasCanonicalizer = 1;
+}
+
+#endif // Tops_OPS

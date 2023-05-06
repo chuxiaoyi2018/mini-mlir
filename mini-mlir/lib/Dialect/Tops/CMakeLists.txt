@@ -1,0 +1,23 @@
+file(GLOB _sources IR/*.cpp)
+
+add_mlir_library(SophgoTops
+  ${_sources}
+
+  ADDITIONAL_HEADER_DIRS
+  ${PROJECT_SOURCE_DIR}/include/sophgo/Dialect/Tops
+
+  DEPENDS
+  MLIRTopsOpsIncGen
+  MLIRInferenceInterfaceIncGen
+
+  LINK_COMPONENTS
+  Core
+
+  LINK_LIBS PUBLIC
+  MLIRIR
+  MLIRSupport
+  #MLIRStandard
+  MLIRSideEffectInterfaces
+  SophgoSupport
+)
+
