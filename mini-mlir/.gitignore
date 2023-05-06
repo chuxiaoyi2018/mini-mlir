@@ -1,0 +1,10 @@
+# Python:
+*.pyc
+__pycache__
+*.so
+*.egg
+*.egg-info
+dist
+build
+
+*.onnx
