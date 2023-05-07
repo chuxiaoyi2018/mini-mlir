@@ -56,6 +56,8 @@ public:
 public:
   std::vector<std::string> input_names;
   std::vector<std::string> output_names;
+  std::vector<std::string>
+      all_tensor_names; // activation tensor, without weight
 
 private:
   ModuleOp module;
