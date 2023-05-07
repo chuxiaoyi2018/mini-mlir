@@ -11,6 +11,7 @@ add_mlir_library(SophgoInitAll
 
   LINK_LIBS PUBLIC
   MLIRIR
+  MLIRFuncDialect
   MLIRSupport
   MLIRInferenceInterface
   SophgoTops

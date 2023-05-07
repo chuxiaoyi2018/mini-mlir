@@ -212,7 +212,7 @@ class MLIRImporter(object):
         return self.buildOp(Tops.ReluOp, operands, [output_type], name=relu_name)
 
     def create_return_op(self, Operands):
-        return_op = Operation.create("std.return", operands=Operands, results=[])
+        return_op = Operation.create("func.return", operands=Operands, results=[])
         self.insert_point.insert(return_op)
         return return_op
 
@@ -253,7 +253,7 @@ class MLIRImporter(object):
 
         tpu_func = """
             module attributes {{tops.weight_file= \"{weight_file}\"}} {{
-                func @main({args}) -> {output} {{
+                func.func @main({args}) -> {output} {{
                     %0 = \"tops.None\"() : () -> none
             }}}}
         """.format(weight_file=self.weight_file, args=args_txt, output=output_txt)
