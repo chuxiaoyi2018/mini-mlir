@@ -2,7 +2,7 @@ add_subdirectory(Interfaces)
 add_subdirectory(Support)
 add_subdirectory(Dialect)
 
-add_mlir_library(SophgoInitAll
+add_mlir_library(MiniInitAll
   InitAll.cpp
   ModuleInterpreter.cpp
 
@@ -14,7 +14,7 @@ add_mlir_library(SophgoInitAll
   MLIRFuncDialect
   MLIRSupport
   MLIRInferenceInterface
-  SophgoTops
-  SophgoSupport
+  MiniTops
+  MiniSupport
 )
 

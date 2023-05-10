@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SOPHGO_INTERFACES_INFERENCEINTERFACE_H_
-#define SOPHGO_INTERFACES_INFERENCEINTERFACE_H_
+#ifndef MINI_INTERFACES_INFERENCEINTERFACE_H_
+#define MINI_INTERFACES_INFERENCEINTERFACE_H_
 
 // #include "mlir/IR/Builders.h"
 // #include "mlir/IR/BuiltinTypes.h"
@@ -27,6 +27,6 @@ namespace mlir {
   };
 }
 /// Include the ODS generated interface header files.
-#include "sophgo/Interfaces/InferenceInterface.h.inc"
+#include "mini_mlir/Interfaces/InferenceInterface.h.inc"
 
-#endif // SOPHGO_INTERFACES_INFERENCEINTERFACE_H_
+#endif // MINI_INTERFACES_INFERENCEINTERFACE_H_

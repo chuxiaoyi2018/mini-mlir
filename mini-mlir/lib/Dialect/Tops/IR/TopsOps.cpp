@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "sophgo/Dialect/Tops/IR/TopsOps.h"
+#include "mini_mlir/Dialect/Tops/IR/TopsOps.h"
 
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -24,12 +24,12 @@ using namespace mlir::tops;
 //===----------------------------------------------------------------------===//
 // Dialect initialize method.
 //===----------------------------------------------------------------------===//
-#include "sophgo/Dialect/Tops/IR/TopsOpsDialect.cpp.inc"
+#include "mini_mlir/Dialect/Tops/IR/TopsOpsDialect.cpp.inc"
 
 void TopsDialect::initialize() {
   addOperations<
 #define GET_OP_LIST
-#include "sophgo/Dialect/Tops/IR/TopsOps.cpp.inc"
+#include "mini_mlir/Dialect/Tops/IR/TopsOps.cpp.inc"
       >();
 }
 
@@ -38,7 +38,7 @@ void TopsDialect::initialize() {
 //===----------------------------------------------------------------------===//
 
 #define GET_OP_CLASSES
-#include "sophgo/Dialect/Tops/IR/TopsOps.cpp.inc"
+#include "mini_mlir/Dialect/Tops/IR/TopsOps.cpp.inc"
 
 
 // void tops::MatMulOp::parseParam(int64_t &batch, int64_t &M, int64_t &K,

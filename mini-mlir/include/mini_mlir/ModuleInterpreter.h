@@ -23,7 +23,7 @@
 #ifndef MLIR_MODULEINTERPRETER_H_
 #define MLIR_MODULEINTERPRETER_H_
 
-#include "sophgo/Interfaces/InferenceInterface.h"
+#include "mini_mlir/Interfaces/InferenceInterface.h"
 
 
 #include "mlir/IR/BuiltinOps.h"

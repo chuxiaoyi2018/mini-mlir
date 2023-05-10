@@ -9,7 +9,7 @@
 
 include "mlir/IR/OpBase.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
-include "sophgo/Interfaces/InferenceInterface.td"
+include "mini_mlir/Interfaces/InferenceInterface.td"
 
 def Tops_Dialect : Dialect {
   let name = "tops";
@@ -78,6 +78,25 @@ def Tops_ReluOp: Tops_Op<"Relu", [Pure,
   let results = (outs AnyTensor:$output);
 
   //let hasCanonicalizer = 1;
+}
+
+def Tops_AddOp: Tops_Op<"Add", [Pure,
+  DeclareOpInterfaceMethods<InferenceInterface,["init","deinit"]>]> {
+  let summary = "Add operator";
+
+  let description = [{
+    Elementwise addition of input1 and input2. Axis of size 1 will be broadcast,
+    as necessary.
+  }];
+
+  let arguments = (ins
+    Variadic<AnyTensor>:$inputs,
+    DefaultValuedAttr<BoolAttr, "false">:$do_relu,
+    DefaultValuedAttr<F64Attr, "-1.0">:$relu_limit,
+    OptionalAttr<F64ArrayAttr>:$coeff
+  );
+
+  let results = (outs AnyTensor:$output);
 }
 
 #endif // Tops_OPS

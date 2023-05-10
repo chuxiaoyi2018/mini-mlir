@@ -7,16 +7,14 @@
 // -------------
 // pure C++ code
 // -------------
-#include "sophgo/Dialect/Tops/IR/TopsOps.h"
-#include "sophgo/ModuleInterpreter.h"
+#include "mini_mlir/Dialect/Tops/IR/TopsOps.h"
+#include "mini_mlir/ModuleInterpreter.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/IR/MLIRContext.h"
+#include "mlir/Dialect/Quant/QuantOps.h"
 #include "mlir/IR/Dialect.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/BuiltinTypes.h"
-#include "mlir/Parser.h"
-#include "mlir/Pass/Pass.h"
+#include "mlir/IR/MLIRContext.h"
+#include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/FileUtilities.h"
 #include "mlir/Transforms/Passes.h"
@@ -26,7 +24,6 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/ToolOutputFile.h"
-#include "llvm/Support/SourceMgr.h"
 
 using namespace mlir;
 
@@ -91,7 +88,7 @@ public:
     registry.insert<tops::TopsDialect, func::FuncDialect>();
     context_ = std::make_unique<MLIRContext>(registry);
 
-    module_ = parseMLIRInput(filename);
+    module_ = parseSourceFile<ModuleOp>(filename, context_.get());
     if (!module_) {
       llvm::errs() << "Error, parse :" << filename << "\n";
       llvm_unreachable("could not parse mlir file\n");
@@ -102,20 +99,6 @@ public:
 
     interpreter_ = std::make_unique<ModuleInterpreter>(module_.get());
     interpreter_->allocate_resources();
-  }
-
-  OwningOpRef<ModuleOp> parseMLIRInput(StringRef inputFilename) {
-    // Set up the input file.
-    std::string errorMessage;
-    auto file = openInputFile(inputFilename, &errorMessage);
-    if (!file) {
-      llvm::errs() << errorMessage << "\n";
-      llvm_unreachable("read find failed");
-    }
-
-    llvm::SourceMgr sourceMgr;
-    sourceMgr.AddNewSourceBuffer(std::move(file), llvm::SMLoc());
-    return parseSourceFile(sourceMgr, context_.get());
   }
 
   py::dict getAllTensor() {

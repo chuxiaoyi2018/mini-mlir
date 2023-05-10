@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "sophgo/Interfaces/InferenceInterface.h"
+#include "mini_mlir/Interfaces/InferenceInterface.h"
 
 using namespace mlir;
 
@@ -15,4 +15,4 @@ using namespace mlir;
 //===----------------------------------------------------------------------===//
 
 /// Include the definitions of the side effect interfaces.
-#include "sophgo/Interfaces/InferenceInterface.cpp.inc"
+#include "mini_mlir/Interfaces/InferenceInterface.cpp.inc"

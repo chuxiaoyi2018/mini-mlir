@@ -1,2 +1,2 @@
-add_subdirectory(sophgo-opt)
+add_subdirectory(mini-opt)
 

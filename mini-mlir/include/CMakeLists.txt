@@ -1,1 +1,1 @@
-add_subdirectory(sophgo)
+add_subdirectory(mini_mlir)

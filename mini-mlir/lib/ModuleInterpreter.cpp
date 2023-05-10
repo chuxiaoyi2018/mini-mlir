@@ -1,7 +1,7 @@
 
-#include "sophgo/ModuleInterpreter.h"
-#include "sophgo/Support/TensorFile.h"
-#include "sophgo/Dialect/Tops/IR/TopsOps.h"
+#include "mini_mlir/ModuleInterpreter.h"
+#include "mini_mlir/Support/TensorFile.h"
+#include "mini_mlir/Dialect/Tops/IR/TopsOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinOps.h"
 #include <algorithm>

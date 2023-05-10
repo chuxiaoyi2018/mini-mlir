@@ -35,3 +35,6 @@ if [ "$1" = "RELEASE" ]; then
   popd
 fi
 
+mv $INSTALL_PATH/python/pymlir.cpython-36m-x86_64-linux-gnu.so $INSTALL_PATH/python/pymlir.cpython-37m-x86_64-linux-gnu.so
+
+echo "mv $INSTALL_PATH/python/pymlir.cpython-36m-x86_64-linux-gnu.so $INSTALL_PATH/python/pymlir.cpython-37m-x86_64-linux-gnu.so"

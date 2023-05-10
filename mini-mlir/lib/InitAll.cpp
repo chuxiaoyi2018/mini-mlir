@@ -7,17 +7,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "sophgo/InitAll.h"
-#include "sophgo/Dialect/Tops/IR/TopsOps.h"
+#include "mini_mlir/InitAll.h"
+#include "mini_mlir/Dialect/Tops/IR/TopsOps.h"
 #include "mlir/Transforms/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Dialect.h"
 
-void mlir::sophgo::registerAllDialects(mlir::DialectRegistry &registry) {
+void mlir::mini_mlir::registerAllDialects(mlir::DialectRegistry &registry) {
   registry.insert<mlir::func::FuncDialect, mlir::tops::TopsDialect>();
   //registry.insert<mlir::StandardOpsDialect>();
 }
 
-void mlir::sophgo::registerAllPasses() {
+void mlir::mini_mlir::registerAllPasses() {
   //mlir::registerCanonicalizerPass();
 }

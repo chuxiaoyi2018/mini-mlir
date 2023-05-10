@@ -7,11 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "sophgo/Dialect/Tops/IR/TopsOps.h"
-#include "sophgo/Interfaces/InferenceInterface.h"
-#include "sophgo/Support/DnnlConv.h"
-#include "sophgo/Support/DnnlPool.h"
-#include "sophgo/Support/DnnlMatMul.h"
+#include "mini_mlir/Dialect/Tops/IR/TopsOps.h"
+#include "mini_mlir/Interfaces/InferenceInterface.h"
 
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -22,12 +19,20 @@
 #include "llvm/Support/Casting.h"
 #include "dnnl.hpp"
 #include "omp.h"
+
+// Add
+#include "mini_mlir/Support/DnnlBinary.h"
+#include "mini_mlir/Support/MathUtils.h"
+
+
 using namespace mlir;
 
 int omp_schedule(int count) {
   return (count + omp_get_num_threads() - 1) / omp_get_num_threads();
 }
 
+
+// relu
 template <typename T> static void relu(T *src, T *dst, size_t size) {
 #pragma omp parallel for schedule(static, omp_schedule(size))
   for (size_t i = 0; i < size; ++i) {
@@ -41,6 +46,59 @@ void tops::ReluOp::deinit(InferenceParameter &p) {}
 LogicalResult tops::ReluOp::inference(InferenceParameter &p) {
   auto num_elem = getInput().getType().cast<RankedTensorType>().getNumElements();
   relu(p.inputs[0], p.outputs[0], num_elem);
+  return success();
+}
+
+
+// Add
+// see lib/Support/MathUtils.cpp   bianry_add
+LogicalResult tops::AddOp::init(InferenceParameter &p) {
+  if (getInputs().size() == 2) {
+    auto binary = new mini_mlir::Binary();
+    auto lhs_shape = getInputs()[0].getType().cast<RankedTensorType>().getShape();
+    auto rhs_shape = getInputs()[1].getType().cast<RankedTensorType>().getShape();
+
+    (*binary)
+        .hs(p.inputs[0], p.inputs[1], lhs_shape, rhs_shape)
+        .dst(p.outputs[0], getOutput().getType().cast<RankedTensorType>().getShape())
+        .do_relu(getDoRelu())
+        .relu_limit(getReluLimit().convertToDouble())
+        .algorithem(algorithm::binary_add)
+        .setup();
+
+    p.handle = (void *)binary;
+  } else {
+    p.handle = nullptr;
+  }
+  return success();
+}
+void tops::AddOp::deinit(InferenceParameter &p) {
+  if (p.handle != nullptr) {
+    auto binary = (mini_mlir::Binary *)p.handle;
+    delete binary;
+    p.handle = nullptr;
+  }
+}
+
+LogicalResult tops::AddOp::inference(InferenceParameter &p) {
+  if (getInputs().size() == 2) {
+    if (p.handle == nullptr) {
+      return failure();
+    }
+    auto binary = (mini_mlir::Binary *)p.handle;
+    binary->run();
+  } else {
+    auto num_elem = getOutput().getType().cast<RankedTensorType>().getNumElements();
+#pragma omp parallel for schedule(static, omp_schedule(num_elem))
+    for (int64_t i = 0; i < num_elem; i++) {
+      p.outputs[0][i] = 0;
+      for (auto in : p.inputs) {
+        if (in != nullptr) {
+          p.outputs[0][i] += in[i];
+        }
+      }
+    }
+  }
   return success();
 }
 

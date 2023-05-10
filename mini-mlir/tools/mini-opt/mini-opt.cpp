@@ -19,21 +19,21 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "sophgo/InitAll.h"
+#include "mini_mlir/InitAll.h"
 
 #include "mlir/InitAllDialects.h"
 #include "mlir/InitAllPasses.h"
-#include "mlir/Support/MlirOptMain.h"
+#include "mlir/Tools/mlir-opt/MlirOptMain.h"
 
 using namespace mlir;
 
 int main(int argc, char **argv) {
-  sophgo::registerAllPasses();
+  mini_mlir::registerAllPasses();
 
   DialectRegistry registry;
-  sophgo::registerAllDialects(registry);
+  mini_mlir::registerAllDialects(registry);
 
   return mlir::asMainReturnCode(mlir::MlirOptMain(
-      argc, argv, "Sophgo MLIR modular optimizer driver\n", registry,
+      argc, argv, "Mini MLIR modular optimizer driver\n", registry,
       /*preloadDialectsInContext=*/false));
 }

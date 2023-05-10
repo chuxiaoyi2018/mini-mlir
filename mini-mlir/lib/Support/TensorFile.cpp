@@ -19,7 +19,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "sophgo/Support/TensorFile.h"
+#include "mini_mlir/Support/TensorFile.h"
 
 using namespace mlir;
 

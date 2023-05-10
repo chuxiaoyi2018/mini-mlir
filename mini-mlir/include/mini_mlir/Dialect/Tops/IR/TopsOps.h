@@ -14,9 +14,9 @@
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
-#include "sophgo/Interfaces/InferenceInterface.h"
+#include "mini_mlir/Interfaces/InferenceInterface.h"
 
-#include "sophgo/Dialect/Tops/IR/TopsOpsDialect.h.inc"
+#include "mini_mlir/Dialect/Tops/IR/TopsOpsDialect.h.inc"
 #define GET_OP_CLASSES
-#include "sophgo/Dialect/Tops/IR/TopsOps.h.inc"
+#include "mini_mlir/Dialect/Tops/IR/TopsOps.h.inc"
 

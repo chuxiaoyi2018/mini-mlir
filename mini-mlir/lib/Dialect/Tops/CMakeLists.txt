@@ -1,6 +1,6 @@
 file(GLOB _sources IR/*.cpp)
 
-add_mlir_library(SophgoTops
+add_mlir_library(MiniTops
   ${_sources}
 
   ADDITIONAL_HEADER_DIRS
@@ -18,6 +18,6 @@ add_mlir_library(SophgoTops
   MLIRSupport
   #MLIRStandard
   MLIRSideEffectInterfaces
-  SophgoSupport
+  MiniSupport
 )
 
