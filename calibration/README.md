@@ -22,5 +22,9 @@ source envsetup.sh
 - Step 2: Run the test
 
 ```bash
-python tests/test_Qlinear.py
+python test_toy.py toy
+```
+
+```bash
+python test_toy.py toy --quant
 ```
