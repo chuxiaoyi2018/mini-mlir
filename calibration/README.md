@@ -1,5 +1,7 @@
 This folder largely borrows from [this repo](https://github.com/megvii-research/FQ-ViT). While the original repo focuses on the full quantization of ViT (as seen in vit_quant.py), this folder focuses on the usage and modification of different quantization components (as seen in subfolder models/ptq).
 
+For now, users need to pay attention to only one file: test_toy.py. This file contains the code for running the toy example. The other files are for reference only.
+
 ## Getting Started
 
 ### Environment
@@ -12,14 +14,6 @@ This folder largely borrows from [this repo](https://github.com/megvii-research/
 All usage examples are in tests folder.
 
 ### Run
-
-- Step 1: Set up the environment varaibles
-
-```bash
-source envsetup.sh
-```
-
-- Step 2: Run the test
 
 ```bash
 python test_toy.py toy
