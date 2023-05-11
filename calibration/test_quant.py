@@ -16,8 +16,7 @@ parser = argparse.ArgumentParser(description='FQ-ViT')
 
 parser.add_argument('model',
                     choices=[
-                        'deit_tiny', 'deit_small', 'deit_base', 'vit_base',
-                        'vit_large', 'swin_tiny', 'swin_small', 'swin_base'
+                        'vit_base', 'vit_large'
                     ],
                     help='model')
 parser.add_argument('data', metavar='DIR', help='path to dataset')
@@ -50,14 +49,8 @@ parser.add_argument('--seed', default=0, type=int, help='seed')
 
 def str2model(name):
     d = {
-        'deit_tiny': deit_tiny_patch16_224,
-        'deit_small': deit_small_patch16_224,
-        'deit_base': deit_base_patch16_224,
         'vit_base': vit_base_patch16_224,
         'vit_large': vit_large_patch16_224,
-        'swin_tiny': swin_tiny_patch4_window7_224,
-        'swin_small': swin_small_patch4_window7_224,
-        'swin_base': swin_base_patch4_window7_224,
     }
     print('Model: %s' % d[name].__name__)
     return d[name]
@@ -90,22 +83,10 @@ def main():
     model = str2model(args.model)(pretrained=True, cfg=cfg)
     model = model.to(device)
 
-    # Note: Different models have different strategies of data preprocessing.
-    model_type = args.model.split('_')[0]
-    if model_type == 'deit':
-        mean = (0.485, 0.456, 0.406)
-        std = (0.229, 0.224, 0.225)
-        crop_pct = 0.875
-    elif model_type == 'vit':
-        mean = (0.5, 0.5, 0.5)
-        std = (0.5, 0.5, 0.5)
-        crop_pct = 0.9
-    elif model_type == 'swin':
-        mean = (0.485, 0.456, 0.406)
-        std = (0.229, 0.224, 0.225)
-        crop_pct = 0.9
-    else:
-        raise NotImplementedError
+    # ViT strategies of data preprocessing.
+    mean = (0.5, 0.5, 0.5)
+    std = (0.5, 0.5, 0.5)
+    crop_pct = 0.9
 
     train_transform = build_transform(mean=mean, std=std, crop_pct=crop_pct)
     val_transform = build_transform(mean=mean, std=std, crop_pct=crop_pct)
