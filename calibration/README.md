@@ -14,7 +14,3 @@ For now, users need to pay attention to only one file: test_toy.py. This file co
 ```bash
 python test_toy.py toy
 ```
-
-```bash
-python test_toy.py toy --quant
-```

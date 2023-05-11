@@ -1,7 +1,7 @@
 import argparse
 import math
 import os
-import time
+import copy
 
 import torch
 import torch.nn as nn
@@ -20,7 +20,6 @@ parser.add_argument('model',
                     ],
                     help='model')
 parser.add_argument('--data', default='/home/hujunhao/hdd-hujunhao/tiny-imagenet-200', help='path to dataset')
-parser.add_argument('--quant', default=False, action='store_true')
 parser.add_argument('--ptf', default=False, action='store_true')
 parser.add_argument('--lis', default=False, action='store_true')
 parser.add_argument('--quant-method',
@@ -79,9 +78,11 @@ def main():
 
     device = torch.device(args.device)
     cfg = Config(args.ptf, args.lis, args.quant_method)
-    model = str2model(args.model)(in_features=3 * 224, out_features=10, \
+    model = str2model(args.model)(in_features=3 * 224 * 224, out_features=10, \
         input_quant=False, output_quant=False, cfg=cfg)
+    model_quant = copy.deepcopy(model)
     model = model.to(device)
+    model_quant = model_quant.to(device)
 
     # ViT strategies of data preprocessing.
     mean = (0.5, 0.5, 0.5)
@@ -89,42 +90,65 @@ def main():
     crop_pct = 0.9
 
     train_transform = build_transform(mean=mean, std=std, crop_pct=crop_pct)
+    val_transform = build_transform(mean=mean, std=std, crop_pct=crop_pct)
 
     # Data
     traindir = os.path.join(args.data, 'train')
+    valdir = os.path.join(args.data, 'val')
+
+    train_dataset = datasets.ImageFolder(traindir, train_transform)
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset,
+        batch_size=args.calib_batchsize,
+        shuffle=True,
+        num_workers=args.num_workers,
+        pin_memory=True,
+        drop_last=True,
+    )
+    val_dataset = datasets.ImageFolder(valdir, val_transform)
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset,
+        batch_size=args.val_batchsize,
+        shuffle=False,
+        num_workers=args.num_workers,
+        pin_memory=True,
+    )
 
     # switch to evaluate mode
     model.eval()
+    model_quant.eval()
+        
+    # Get calibration set.
+    image_list = []
+    for i, (data, target) in enumerate(train_loader):
+        if i == args.calib_iter:
+            break
+        data = data.to(device)
+        image_list.append(data)
 
-    if args.quant:
-        train_dataset = datasets.ImageFolder(traindir, train_transform)
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset,
-            batch_size=args.calib_batchsize,
-            shuffle=True,
-            num_workers=args.num_workers,
-            pin_memory=True,
-            drop_last=True,
-        )
-        # Get calibration set.
-        image_list = []
-        for i, (data, target) in enumerate(train_loader):
-            if i == args.calib_iter:
-                break
-            data = data.to(device)
-            image_list.append(data)
+    print('Calibrating...')
+    model_quant.model_open_calibrate()
+    with torch.no_grad():
+        for i, image in enumerate(image_list):
+            if i == len(image_list) - 1:
+                # This is used for OMSE method to
+                # calculate minimum quantization error
+                model_quant.model_open_last_calibrate()
+            output = model_quant(image.view(-1, 3 * 224 * 224))
+    model_quant.model_close_calibrate()
+    model_quant.model_quant()
 
-        print('Calibrating...')
-        model.model_open_calibrate()
+    for i, (data, target) in enumerate(val_loader):
+        data = data.to(device)
+        target = target.to(device)
+
         with torch.no_grad():
-            for i, image in enumerate(image_list):
-                if i == len(image_list) - 1:
-                    # This is used for OMSE method to
-                    # calculate minimum quantization error
-                    model.model_open_last_calibrate()
-                output = model(image.view(-1, 3 * 224))
-        model.model_close_calibrate()
-        model.model_quant()
+            output = model(data.view(-1, 3 * 224 * 224))
+            output_quant = model_quant(data.view(-1, 3 * 224 * 224))
+        diff = torch.max(torch.abs(output - output_quant))
+        print(diff)
+        break
+        
 
 def build_transform(input_size=224,
                     interpolation='bicubic',
