@@ -9,10 +9,6 @@ For now, users need to pay attention to only one file: test_toy.py. This file co
 - torch 2.0
 - cuda 11.7
 
-### Examples
-
-All usage examples are in tests folder.
-
 ### Run
 
 ```bash
