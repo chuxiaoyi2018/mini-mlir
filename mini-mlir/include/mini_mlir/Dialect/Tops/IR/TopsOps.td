@@ -99,4 +99,43 @@ def Tops_AddOp: Tops_Op<"Add", [Pure,
   let results = (outs AnyTensor:$output);
 }
 
+
+def Tops_DivOp: Tops_Op<"Div", [Pure,
+  DeclareOpInterfaceMethods<InferenceInterface,["init","deinit"]>]> {
+  let summary = "Div operator";
+
+  let description = [{
+    Elementwise division of input1 and input2. Axis of size 1 will be broadcast,
+    as necessary.
+  }];
+
+  let arguments = (ins
+    Variadic<AnyTensor>:$inputs,
+    DefaultValuedAttr<BoolAttr, "false">:$do_relu,
+    DefaultValuedAttr<F64Attr, "-1.0">:$relu_limit,
+    OptionalAttr<F64ArrayAttr>:$coeff
+  );
+
+  let results = (outs AnyTensor:$output);
+}
+
+def Tops_SubOp: Tops_Op<"Sub", [Pure,
+  DeclareOpInterfaceMethods<InferenceInterface,["init","deinit"]>]> {
+  let summary = "Sub operator";
+
+  let description = [{
+    Elementwise subtraction of input1 and input2. Axis of size 1 will be broadcast,
+    as necessary.
+  }];
+
+  let arguments = (ins
+    Variadic<AnyTensor>:$inputs,
+    DefaultValuedAttr<BoolAttr, "false">:$do_relu,
+    DefaultValuedAttr<F64Attr, "-1.0">:$relu_limit,
+    OptionalAttr<F64ArrayAttr>:$coeff
+  );
+
+  let results = (outs AnyTensor:$output);
+}
+
 #endif // Tops_OPS

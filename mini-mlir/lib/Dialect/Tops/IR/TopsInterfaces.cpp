@@ -102,6 +102,87 @@ LogicalResult tops::AddOp::inference(InferenceParameter &p) {
   return success();
 }
 
+
+// Sub
+// see third_party/oneDNN/include/oneapi/dnnl/dnnl.hpp   bianry_sub
+LogicalResult tops::SubOp::init(InferenceParameter &p) {
+  if (getInputs().size() == 2) {
+    auto binary = new mini_mlir::Binary();
+    auto lhs_shape = getInputs()[0].getType().cast<RankedTensorType>().getShape();
+    auto rhs_shape = getInputs()[1].getType().cast<RankedTensorType>().getShape();
+
+    (*binary)
+        .hs(p.inputs[0], p.inputs[1], lhs_shape, rhs_shape)
+        .dst(p.outputs[0], getOutput().getType().cast<RankedTensorType>().getShape())
+        .do_relu(getDoRelu())
+        .relu_limit(getReluLimit().convertToDouble())
+        .algorithem(algorithm::binary_sub)
+        .setup();
+
+    p.handle = (void *)binary;
+  } else {
+    p.handle = nullptr;
+  }
+  return success();
+}
+void tops::SubOp::deinit(InferenceParameter &p) {
+  if (p.handle != nullptr) {
+    auto binary = (mini_mlir::Binary *)p.handle;
+    delete binary;
+    p.handle = nullptr;
+  }
+}
+
+LogicalResult tops::SubOp::inference(InferenceParameter &p) {
+  if (p.handle == nullptr) {
+    return failure();
+  }
+  auto binary = (mini_mlir::Binary *)p.handle;
+  binary->run();
+  return success();
+}
+
+
+// Div
+// see third_party/oneDNN/include/oneapi/dnnl/dnnl.hpp   bianry_div
+LogicalResult tops::DivOp::init(InferenceParameter &p) {
+  if (getInputs().size() == 2) {
+    auto binary = new mini_mlir::Binary();
+    auto lhs_shape = getInputs()[0].getType().cast<RankedTensorType>().getShape();
+    auto rhs_shape = getInputs()[1].getType().cast<RankedTensorType>().getShape();
+
+    (*binary)
+        .hs(p.inputs[0], p.inputs[1], lhs_shape, rhs_shape)
+        .dst(p.outputs[0], getOutput().getType().cast<RankedTensorType>().getShape())
+        .do_relu(getDoRelu())
+        .relu_limit(getReluLimit().convertToDouble())
+        .algorithem(algorithm::binary_div)
+        .setup();
+
+    p.handle = (void *)binary;
+  } else {
+    p.handle = nullptr;
+  }
+  return success();
+}
+void tops::DivOp::deinit(InferenceParameter &p) {
+  if (p.handle != nullptr) {
+    auto binary = (mini_mlir::Binary *)p.handle;
+    delete binary;
+    p.handle = nullptr;
+  }
+}
+
+LogicalResult tops::DivOp::inference(InferenceParameter &p) {
+  if (p.handle == nullptr) {
+    return failure();
+  }
+  auto binary = (mini_mlir::Binary *)p.handle;
+  binary->run();
+  return success();
+}
+
+
 // LogicalResult tops::MatMulOp::init(InferenceParameter &p) {
 //   auto matmul = new dnnl::MatMul();
 //   int64_t batch, M, K, N;

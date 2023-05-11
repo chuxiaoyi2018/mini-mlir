@@ -5,6 +5,8 @@ class Tops:
     WeightOp = 'tops.Weight'
     InputOp = 'tops.Input'
     AddOp = 'tops.Add'
+    SubOp = 'tops.Sub'
+    DivOp = 'tops.Div'
     AvgPoolOp = 'tops.AvgPool'
     BatchNormOp = 'tops.BatchNorm'
     ConvOp = 'tops.Conv'
@@ -127,6 +129,24 @@ class MLIRImporter(object):
         if "coeff" in kargs:
             param['coeff'] = self.ArrayAttr(kargs['coeff'], self.mlir_type['F64'])
         return self.buildOp(Tops.AddOp, operands, [output_type], **param)
+
+    def create_sub_op(self, operands, output_shape, **kargs):
+        if len(operands) < 2:
+            raise RuntimeError("input operand must great than 2")
+        output_type = RankedTensorType.get(tuple(output_shape), self.get_value_type(operands[0]))
+        param = {'name': StringAttr.get(kargs['name']), 'do_relu': BoolAttr.get(False)}
+        if "coeff" in kargs:
+            param['coeff'] = self.ArrayAttr(kargs['coeff'], self.mlir_type['F64'])
+        return self.buildOp(Tops.SubOp, operands, [output_type], **param)
+
+    def create_div_op(self, operands, output_shape, **kargs):
+        if len(operands) < 2:
+            raise RuntimeError("input operand must great than 2")
+        output_type = RankedTensorType.get(tuple(output_shape), self.get_value_type(operands[0]))
+        param = {'name': StringAttr.get(kargs['name']), 'do_relu': BoolAttr.get(False)}
+        if "coeff" in kargs:
+            param['coeff'] = self.ArrayAttr(kargs['coeff'], self.mlir_type['F64'])
+        return self.buildOp(Tops.DivOp, operands, [output_type], **param)
 
     def create_avgpool_op(self, operands, output_shape, **kargs):
         """

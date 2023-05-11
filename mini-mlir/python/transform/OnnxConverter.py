@@ -94,6 +94,8 @@ class OnnxConverter(BaseConverter):
 
         self.onnxop_factory = {
             "Add": lambda node: self.convert_add_op(node),
+            "Sub": lambda node: self.convert_sub_op(node),
+            "Div": lambda node: self.convert_div_op(node),
             "AveragePool": lambda node: self.convert_avgpool_op(node),
             "BatchNormalization": lambda node: self.convert_batchnorm_op(node),
             "Conv": lambda node: self.convert_conv_op(node),
@@ -262,6 +264,32 @@ class OnnxConverter(BaseConverter):
         p = {'name': "{}_{}".format(onnx_node.name, onnx_node.op_type)}
         output_shape = self.getShape(onnx_node.name)
         add_op = self.mlir.create_add_op([op0, op1], output_shape, **p)
+        self.addOperand(onnx_node.name, add_op)
+        return
+
+    def convert_sub_op(self, onnx_node):
+        assert (len(onnx_node.inputs) == 2)
+        if self.isTensor(onnx_node.inputs[0]) or self.isTensor(onnx_node.inputs[1]):
+            # TODO: support tensor
+            raise RuntimeError("not support Tensor")
+        op0 = self.getOperand(onnx_node.inputs[0])
+        op1 = self.getOperand(onnx_node.inputs[1])
+        p = {'name': "{}_{}".format(onnx_node.name, onnx_node.op_type)}
+        output_shape = self.getShape(onnx_node.name)
+        add_op = self.mlir.create_sub_op([op0, op1], output_shape, **p)
+        self.addOperand(onnx_node.name, add_op)
+        return
+
+    def convert_div_op(self, onnx_node):
+        assert (len(onnx_node.inputs) == 2)
+        if self.isTensor(onnx_node.inputs[0]) or self.isTensor(onnx_node.inputs[1]):
+            # TODO: support tensor
+            raise RuntimeError("not support Tensor")
+        op0 = self.getOperand(onnx_node.inputs[0])
+        op1 = self.getOperand(onnx_node.inputs[1])
+        p = {'name': "{}_{}".format(onnx_node.name, onnx_node.op_type)}
+        output_shape = self.getShape(onnx_node.name)
+        add_op = self.mlir.create_div_op([op0, op1], output_shape, **p)
         self.addOperand(onnx_node.name, add_op)
         return
 
