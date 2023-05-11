@@ -1,34 +1,26 @@
-The README is on the way.
+This folder largely borrows from [this repo](https://github.com/megvii-research/FQ-ViT). While the original repo focuses on the full quantization of ViT (as seen in vit_quant.py), this folder focuses on the usage and modification of different quantization components (as seen in subfolder models/ptq).
 
-<!-- ## Getting Started
+## Getting Started
 
 ### Environment
 
-- Install PyTorch and torchvision. e.g.,
+- torch 2.0
+- cuda 11.7
 
-```bash
-conda install pytorch=1.7.1 torchvision cudatoolkit=10.1 -c pytorch
-```
+### Examples
+
+All usage examples are in tests folder.
 
 ### Run
 
-
-Example: Evaluate quantized vit_base with MinMax quantizer and PTF and LIS.
-
-```bash
-python test_quant.py vit_base <YOUR_DATA_DIR> --quant --ptf --lis --quant-method minmax
-```
+- Step 1: Set up the environment varaibles
 
 ```bash
-python test_quant.py vit_base /home/hujunhao/hdd-hujunhao/tiny-imagenet-200 --quant --quant-method minmax
+source envsetup.sh
 ```
 
-- `vit_small`: model architecture, which can be replaced by `vit_base`, `vit_large`.
+- Step 2: Run the test
 
-- `--quant`: whether to quantize the model.
-
-- `--ptf`: whether to use **Power-of-Two Factor Integer Layernorm**.
-
-- `--lis`: whether to use **Log-Integer-Softmax**.
-
-- `--quant-method`: quantization methods of activations, which can be chosen from `minmax`, `ema`, `percentile` and `omse`. -->
+```bash
+python tests/test_Qlinear.py
+```
