@@ -11,8 +11,6 @@ http://disk-sophgo-vip.quickconnect.cn/sharing/cMgVR8Ssu
 
 
 #### 第三版的改动（第二十九次提交）
-第三版的代码http://disk-sophgo-vip.quickconnect.cn/sharing/C9jGgLDlg ，包含third_part和编译文件，比较大4.8G
-密码123456
 
 【版本改动】
 * 完成了top2tosa的工作，可以生成tosa.mlir文件
