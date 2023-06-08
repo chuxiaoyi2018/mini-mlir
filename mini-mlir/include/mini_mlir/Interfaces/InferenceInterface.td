@@ -11,15 +11,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SOPHGO_INFERENCEINTERFACE
-#define SOPHGO_INFERENCEINTERFACE
+#ifndef MINI_MLIR_INFERENCEINTERFACE
+#define MINI_MLIR_INFERENCEINTERFACE
 
 include "mlir/IR/OpBase.td"
 
 def InferenceInterface : OpInterface<"InferenceInterface"> {
   let description = [{
   }];
-  let cppNamespace = "::mlir";
+  let cppNamespace = "::mini_mlir";
   let methods = [
       InterfaceMethod<
         /*desc=*/[{
@@ -48,4 +48,4 @@ def InferenceInterface : OpInterface<"InferenceInterface"> {
       >,
   ];
 }
-#endif // SOPHGO_INFERENCEINTERFACE
+#endif // MINI_MLIR_INFERENCEINTERFACE

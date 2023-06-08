@@ -12,11 +12,13 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/OpDefinition.h"
+#include "mlir/Pass/Pass.h"
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "mini_mlir/Interfaces/InferenceInterface.h"
+#include "mini_mlir/Support/Module.h"
 
-#include "mini_mlir/Dialect/Tops/IR/TopsOpsDialect.h.inc"
+#include "mini_mlir/Dialect/Top/IR/TopOpsDialect.h.inc"
 #define GET_OP_CLASSES
-#include "mini_mlir/Dialect/Tops/IR/TopsOps.h.inc"
+#include "mini_mlir/Dialect/Top/IR/TopOps.h.inc"
 

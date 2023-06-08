@@ -19,7 +19,7 @@
 // #include "mlir/IR/Operation.h"
 #include "mlir/IR/OpDefinition.h"
 
-namespace mlir {
+namespace mini_mlir {
   struct InferenceParameter {
     std::vector<float*> inputs;
     std::vector<float*> outputs;

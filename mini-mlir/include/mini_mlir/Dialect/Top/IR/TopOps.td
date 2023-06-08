@@ -1,28 +1,28 @@
 // =============================================================================
 //
-// Defines TOPS Dialect operations.
+// Defines TOP Dialect operations.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef TOPS_OPS
-#define TOPS_OPS
+#ifndef MINI_MLIR_TOP_OPS
+#define MINI_MLIR_TOP_OPS
 
 include "mlir/IR/OpBase.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mini_mlir/Interfaces/InferenceInterface.td"
 
-def Tops_Dialect : Dialect {
-  let name = "tops";
-  let summary = "A tops dialect for the SOPHGO specification";
-  let cppNamespace = "::mlir::tops";
+def Top_Dialect : Dialect {
+  let name = "top";
+  let summary = "A top dialect for the MINI specification";
+  let cppNamespace = "::mini_mlir::top";
 }
 
 def AnyTensorOrNone: AnyTypeOf<[AnyTensor, NoneType]>;
 
-class Tops_Op<string mnemonic, list<Trait> traits = []> :
-    Op<Tops_Dialect, mnemonic, traits> ;
+class Top_Op<string mnemonic, list<Trait> traits = []> :
+    Op<Top_Dialect, mnemonic, traits> ;
 
-def Tops_NoneOp : Tops_Op<"None", [Pure]> {
+def Top_NoneOp : Top_Op<"None", [Pure]> {
   let summary = "none operator";
 
   let description = [{
@@ -31,24 +31,38 @@ def Tops_NoneOp : Tops_Op<"None", [Pure]> {
   let results = (outs NoneType);
 }
 
-def Tops_WeightOp : Tops_Op<"Weight", [Pure]> {
+def Top_WeightOp : Top_Op<"Weight", [Pure]> {
   let summary = "load weight operator";
 
   let description = [{
-    Load weight from a file. The file should be a valid .npy format file.
-    This Op does not take any input, and the attribute captures the file name.
+    Load weight from a file. The file should be a valid .npz format file.
+    This Op does not take any input, and the location captures the tensor name.
     The Output is an n-dimensional tensor whose type matches
-    the tensor type in the .npy file.
+    the tensor type in the .npz file.
   }];
 
-  let arguments = (
-    StrAttr:$name
+  let arguments = (ins
+    OptionalAttr<F64ArrayAttr>:$scale,
+    OptionalAttr<BoolAttr>:$do_compress
   );
 
-  let results = (outs AnyTensor:$output);
+  let results = (outs AnyRankedTensor:$output);
+  let extraClassDeclaration = [{
+  template<typename T>
+  std::shared_ptr<std::vector<T>> read();
+  std::shared_ptr<std::vector<float>> read_as_float();
+  template<typename T>
+  static mlir::Value create(mlir::Operation * OwnerOp,
+                            llvm::StringRef suffix,
+                            const std::vector<T>& data,
+                            mlir::RankedTensorType& type);
+  template<typename T>
+  mlir::LogicalResult update(const std::vector<T>& data, size_t count);
+  mlir::Value clone_int(mlir::Operation *OwnerOp);
+  }];
 }
 
-def Tops_InputOp: Tops_Op<"Input",[Pure]> {
+def Top_InputOp: Top_Op<"Input",[Pure]> {
   let summary = "Input operator";
 
   let description = [{
@@ -62,7 +76,7 @@ def Tops_InputOp: Tops_Op<"Input",[Pure]> {
   let results = (outs AnyTensor:$output);
 }
 
-def Tops_ReluOp: Tops_Op<"Relu", [Pure,
+def Top_ReluOp: Top_Op<"Relu", [Pure,
   DeclareOpInterfaceMethods<InferenceInterface,["init","deinit"]>]> {
   let summary = "Relu operator";
 
@@ -80,7 +94,7 @@ def Tops_ReluOp: Tops_Op<"Relu", [Pure,
   //let hasCanonicalizer = 1;
 }
 
-def Tops_AddOp: Tops_Op<"Add", [Pure,
+def Top_AddOp: Top_Op<"Add", [Pure,
   DeclareOpInterfaceMethods<InferenceInterface,["init","deinit"]>]> {
   let summary = "Add operator";
 
@@ -100,7 +114,7 @@ def Tops_AddOp: Tops_Op<"Add", [Pure,
 }
 
 
-def Tops_DivOp: Tops_Op<"Div", [Pure,
+def Top_DivOp: Top_Op<"Div", [Pure,
   DeclareOpInterfaceMethods<InferenceInterface,["init","deinit"]>]> {
   let summary = "Div operator";
 
@@ -119,7 +133,7 @@ def Tops_DivOp: Tops_Op<"Div", [Pure,
   let results = (outs AnyTensor:$output);
 }
 
-def Tops_SubOp: Tops_Op<"Sub", [Pure,
+def Top_SubOp: Top_Op<"Sub", [Pure,
   DeclareOpInterfaceMethods<InferenceInterface,["init","deinit"]>]> {
   let summary = "Sub operator";
 
@@ -138,4 +152,4 @@ def Tops_SubOp: Tops_Op<"Sub", [Pure,
   let results = (outs AnyTensor:$output);
 }
 
-#endif // Tops_OPS
+#endif // Top_OPS

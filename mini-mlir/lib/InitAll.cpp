@@ -8,16 +8,25 @@
 //===----------------------------------------------------------------------===//
 
 #include "mini_mlir/InitAll.h"
-#include "mini_mlir/Dialect/Tops/IR/TopsOps.h"
+#include "mini_mlir/Dialect/Top/IR/TopOps.h"
+#include "mini_mlir/Conversion/Passes.h"
+#include "mini_mlir/Dialect/Top/Transforms/Passes.h"
 #include "mlir/Transforms/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Dialect.h"
+#include "mlir/Dialect/Tosa/IR/TosaOps.h"
 
-void mlir::mini_mlir::registerAllDialects(mlir::DialectRegistry &registry) {
-  registry.insert<mlir::func::FuncDialect, mlir::tops::TopsDialect>();
+
+namespace mini_mlir {
+void registerAllDialects(mlir::DialectRegistry &registry) {
+  registry.insert<mlir::tosa::TosaDialect, mlir::func::FuncDialect, top::TopDialect>();
   //registry.insert<mlir::StandardOpsDialect>();
 }
 
-void mlir::mini_mlir::registerAllPasses() {
+void registerAllPasses() {
+  mlir::registerConversionPasses();
+  top::registerTopPasses();
   //mlir::registerCanonicalizerPass();
 }
+} // namespace mini_mlir
+

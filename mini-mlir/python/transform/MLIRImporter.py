@@ -1,19 +1,19 @@
 from mlir.ir import *
 
 
-class Tops:
-    WeightOp = 'tops.Weight'
-    InputOp = 'tops.Input'
-    AddOp = 'tops.Add'
-    SubOp = 'tops.Sub'
-    DivOp = 'tops.Div'
-    AvgPoolOp = 'tops.AvgPool'
-    BatchNormOp = 'tops.BatchNorm'
-    ConvOp = 'tops.Conv'
-    MatMulOp = 'tops.MatMul'
-    MaxPoolOp = 'tops.MaxPool'
-    ReshapeOp = 'tops.Reshape'
-    ReluOp = 'tops.Relu'
+class Top:
+    WeightOp = 'top.Weight'
+    InputOp = 'top.Input'
+    AddOp = 'top.Add'
+    SubOp = 'top.Sub'
+    DivOp = 'top.Div'
+    AvgPoolOp = 'top.AvgPool'
+    BatchNormOp = 'top.BatchNorm'
+    ConvOp = 'top.Conv'
+    MatMulOp = 'top.MatMul'
+    MaxPoolOp = 'top.MaxPool'
+    ReshapeOp = 'top.Reshape'
+    ReluOp = 'top.Relu'
 
 
 def checkType(obj, type):
@@ -100,7 +100,7 @@ class MLIRImporter(object):
         param = {
             "name": StringAttr.get(name),
         }
-        op = Operation.create(Tops.InputOp,
+        op = Operation.create(Top.InputOp,
                               results=[self.input_types[index]],
                               operands=[self.func_args[index]],
                               attributes=param)
@@ -115,7 +115,7 @@ class MLIRImporter(object):
             return _op
         tensor_type = RankedTensorType.get(output_shape, self.mlir_type[data_type])
         attributes = {"name": StringAttr.get(name)}
-        op = Operation.create(Tops.WeightOp, results=[tensor_type], attributes=attributes)
+        op = Operation.create(Top.WeightOp, results=[tensor_type], attributes=attributes)
         self.insert_point.insert(op)
         result = op.results[0]
         self.load_weight[name] = (result, output_shape, data_type)
@@ -128,7 +128,7 @@ class MLIRImporter(object):
         param = {'name': StringAttr.get(kargs['name']), 'do_relu': BoolAttr.get(False)}
         if "coeff" in kargs:
             param['coeff'] = self.ArrayAttr(kargs['coeff'], self.mlir_type['F64'])
-        return self.buildOp(Tops.AddOp, operands, [output_type], **param)
+        return self.buildOp(Top.AddOp, operands, [output_type], **param)
 
     def create_sub_op(self, operands, output_shape, **kargs):
         if len(operands) < 2:
@@ -137,7 +137,7 @@ class MLIRImporter(object):
         param = {'name': StringAttr.get(kargs['name']), 'do_relu': BoolAttr.get(False)}
         if "coeff" in kargs:
             param['coeff'] = self.ArrayAttr(kargs['coeff'], self.mlir_type['F64'])
-        return self.buildOp(Tops.SubOp, operands, [output_type], **param)
+        return self.buildOp(Top.SubOp, operands, [output_type], **param)
 
     def create_div_op(self, operands, output_shape, **kargs):
         if len(operands) < 2:
@@ -146,7 +146,7 @@ class MLIRImporter(object):
         param = {'name': StringAttr.get(kargs['name']), 'do_relu': BoolAttr.get(False)}
         if "coeff" in kargs:
             param['coeff'] = self.ArrayAttr(kargs['coeff'], self.mlir_type['F64'])
-        return self.buildOp(Tops.DivOp, operands, [output_type], **param)
+        return self.buildOp(Top.DivOp, operands, [output_type], **param)
 
     def create_avgpool_op(self, operands, output_shape, **kargs):
         """
@@ -164,7 +164,7 @@ class MLIRImporter(object):
             'pads': self.ArrayAttr(kargs['pads']),
             'do_relu': BoolAttr.get(kargs['do_relu']),
         }
-        return self.buildOp(Tops.AvgPoolOp, operands, [output_type], **param)
+        return self.buildOp(Top.AvgPoolOp, operands, [output_type], **param)
 
     def create_batchnorm_op(self, operands, output_shape, **kargs):
         output_type = RankedTensorType.get(tuple(output_shape), self.get_value_type(operands[0]))
@@ -174,7 +174,7 @@ class MLIRImporter(object):
             'epsilon': FloatAttr.get_f32(kargs['epsilon'])
         }
 
-        return self.buildOp(Tops.BatchNormOp, operands, [output_type], **param)
+        return self.buildOp(Top.BatchNormOp, operands, [output_type], **param)
 
     def create_conv_op(self, operands, output_shape, **kargs):
         """
@@ -196,7 +196,7 @@ class MLIRImporter(object):
         }
         if 'inserts' in kargs:
             param['inserts'] = self.ArrayAttr(kargs['inserts'])
-        return self.buildOp(Tops.ConvOp, operands, [output_type], **param)
+        return self.buildOp(Top.ConvOp, operands, [output_type], **param)
 
     def create_maxpool_op(self, operands, output_shape, **kargs):
         """
@@ -214,7 +214,7 @@ class MLIRImporter(object):
             'pads': self.ArrayAttr(kargs['pads']),
             'do_relu': BoolAttr.get(kargs['do_relu']),
         }
-        return self.buildOp(Tops.MaxPoolOp, operands, [output_type], **param)
+        return self.buildOp(Top.MaxPoolOp, operands, [output_type], **param)
 
     def create_matmul_op(self, operands, output_shape, **kargs):
         # get_value_type
@@ -224,12 +224,12 @@ class MLIRImporter(object):
             'name': StringAttr.get(kargs['name']),
             'do_relu': BoolAttr.get(kargs['do_relu']),
         }
-        return self.buildOp(Tops.MatMulOp, operands, [output_type], **param)
+        return self.buildOp(Top.MatMulOp, operands, [output_type], **param)
 
     def create_relu_op(self, operands, output_shape, **kargs):
         output_type = RankedTensorType.get(tuple(output_shape), self.get_value_type(operands[0]))
         relu_name = StringAttr.get(kargs['name'])
-        return self.buildOp(Tops.ReluOp, operands, [output_type], name=relu_name)
+        return self.buildOp(Top.ReluOp, operands, [output_type], name=relu_name)
 
     def create_return_op(self, Operands):
         return_op = Operation.create("func.return", operands=Operands, results=[])
@@ -239,7 +239,7 @@ class MLIRImporter(object):
     def create_reshape_op(self, operands, output_shape, **kargs):
         output_type = RankedTensorType.get(tuple(output_shape), self.get_value_type(operands[0]))
         reshape_name = StringAttr.get(kargs['name'])
-        return self.buildOp(Tops.ReshapeOp, operands, [output_type], name=reshape_name)
+        return self.buildOp(Top.ReshapeOp, operands, [output_type], name=reshape_name)
 
     def print_module(self):
         mlir_format = str(self.mlir_module)
@@ -270,11 +270,18 @@ class MLIRImporter(object):
                 args_txt += ", "
         if self.num_output > 1:
             output_txt = "({})".format(output_txt)
+        mini_func = """
+            module attributes {{module.weight_file= \"{weight_file}\", module.platform=\"{platform}\", module.state=\"{state}\", module.chip=\"{chip}\"}} {{
+                func.func @main({args}) -> {output} {{
+                    %0 = \"top.None\"() : () -> none loc(unknown)
+                }} loc(unknown)
+            }} loc(unknown)
+        """
 
         tpu_func = """
-            module attributes {{tops.weight_file= \"{weight_file}\"}} {{
+            module attributes {{top.weight_file= \"{weight_file}\"}} {{
                 func.func @main({args}) -> {output} {{
-                    %0 = \"tops.None\"() : () -> none
+                    %0 = \"top.None\"() : () -> none
             }}}}
         """.format(weight_file=self.weight_file, args=args_txt, output=output_txt)
         self.mlir_module = Module.parse(tpu_func, self.ctx)

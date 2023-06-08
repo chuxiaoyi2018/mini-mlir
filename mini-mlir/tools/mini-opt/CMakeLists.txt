@@ -4,7 +4,8 @@ set(LLVM_LINK_COMPONENTS
   )
 
 set(LIBS
-  #MLIRFuncDialect
+  MLIRFuncDialect
+  MLIRTosaDialect
   MLIROptLib
   MiniInitAll
   )

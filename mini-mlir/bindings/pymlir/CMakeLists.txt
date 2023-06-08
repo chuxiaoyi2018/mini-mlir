@@ -20,6 +20,5 @@ target_link_libraries(pymlir PRIVATE
   MLIRParser
   LLVMCore
   LLVMSupport
-  LLVMAsmParser
 )
 install(TARGETS pymlir DESTINATION python)

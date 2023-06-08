@@ -15,8 +15,10 @@ add_mlir_library(MiniInitAll
   MLIRIR
   MLIRFuncDialect
   MLIRSupport
+  MLIRTosaDialect
   MLIRInferenceInterface
-  MiniTops
+  MiniTop
   MiniSupport
+  MiniTopToTosa
 )
 

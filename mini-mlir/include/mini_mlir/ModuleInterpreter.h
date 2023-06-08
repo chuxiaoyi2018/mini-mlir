@@ -38,7 +38,9 @@
 
 #define DEBUG_TYPE "interpreter"
 
-namespace mlir {
+using namespace mlir;
+
+namespace mini_mlir {
 // Implementation class for module interpreter.
 class ModuleInterpreter {
 
@@ -66,6 +68,6 @@ private:
   std::map<std::string, std::shared_ptr<std::vector<float>>> mem_map;
 };
 
-} // namespace mlir
+} // namespace mini_mlir
 
 #endif // MLIR_DIALECT_TPU_MODULEINTERPRETER_H_

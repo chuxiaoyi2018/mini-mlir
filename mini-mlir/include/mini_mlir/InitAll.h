@@ -11,11 +11,10 @@
 
 #include "mlir/IR/Dialect.h"
 
-namespace mlir {
+
 namespace mini_mlir {
 
 void registerAllDialects(mlir::DialectRegistry &registry);
 void registerAllPasses();
 
-} // namespace sophgo
-} // namespace mlir
+} // namespace mini_mlir

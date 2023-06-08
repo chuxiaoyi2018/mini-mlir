@@ -1,7 +1,7 @@
 
 #include "mini_mlir/ModuleInterpreter.h"
 #include "mini_mlir/Support/TensorFile.h"
-#include "mini_mlir/Dialect/Tops/IR/TopsOps.h"
+#include "mini_mlir/Dialect/Top/IR/TopOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinOps.h"
 #include <algorithm>
@@ -10,12 +10,13 @@
 #include <mutex>
 #include <numeric>
 
-namespace mlir {
+
+namespace mini_mlir {
 
 ModuleInterpreter::~ModuleInterpreter() {
   for (auto func : module.getOps<mlir::func::FuncOp>()) {
     func.walk([&](Operation *op) {
-      if (auto infer_op = llvm::dyn_cast<mlir::InferenceInterface>(op)) {
+      if (auto infer_op = llvm::dyn_cast<InferenceInterface>(op)) {
         auto name = op->getAttrOfType<StringAttr>("name").str();
         infer_op.deinit(*inference_map[name]);
       }
@@ -25,7 +26,7 @@ ModuleInterpreter::~ModuleInterpreter() {
 
 void ModuleInterpreter::allocate_resources() {
   auto weight_file =
-      module->getAttrOfType<StringAttr>("tops.weight_file").str();
+      module->getAttrOfType<StringAttr>("top.weight_file").str();
   auto wfile = openTensorFile(weight_file);
   for (auto func : module.getOps<mlir::func::FuncOp>()) {
     // if (func.getName() != "main") {
@@ -33,7 +34,7 @@ void ModuleInterpreter::allocate_resources() {
     // }
     // alloce buffer for all value
     func.walk([&](Operation *op) {
-      if (op == func.getOperation() || isa<tops::NoneOp>(op)) {
+      if (op == func.getOperation() || isa<top::NoneOp>(op)) {
         // self
       } else if (isa<mlir::func::ReturnOp>(op)) {
         for (auto v : op->getOperands()) {
@@ -46,25 +47,25 @@ void ModuleInterpreter::allocate_resources() {
         auto type = result.getType().cast<TensorType>();
         auto count = type.getNumElements();
         auto name = op->getAttrOfType<StringAttr>("name").str();
-        if (isa<tops::WeightOp>(op)) {
+        if (isa<top::WeightOp>(op)) {
           mem_map[name] = wfile->readTensor<float>(name, type);
         } else {
           mem_map[name] = std::make_shared<std::vector<float>>(count);
           value_map[name] = result;
         }
-        if (isa<tops::InputOp>(op)) {
+        if (isa<top::InputOp>(op)) {
           input_names.push_back(name);
         }
       }
     });
     // input output buffers for all ops
     func.walk([&](Operation *op) {
-      if (auto infer_op = llvm::dyn_cast<mlir::InferenceInterface>(op)) {
+      if (auto infer_op = llvm::dyn_cast<InferenceInterface>(op)) {
         auto name = op->getAttrOfType<StringAttr>("name").str();
         auto param = std::make_shared<InferenceParameter>();
         param->outputs.push_back(mem_map[name]->data());
         for (auto input : op->getOperands()) {
-          if (input.getType().isa<mlir::NoneType>()) {
+          if (input.getType().isa<NoneType>()) {
             param->inputs.push_back(nullptr);
             continue;
           }
@@ -92,7 +93,7 @@ void ModuleInterpreter::invoke() {
     // if (func.getName() != "main") {
     //   continue;
     // }
-    func.walk([&](mlir::InferenceInterface infer_op) {
+    func.walk([&](InferenceInterface infer_op) {
       auto name = infer_op->getAttrOfType<StringAttr>("name").str();
       if (failed(infer_op.inference(*inference_map[name]))) {
         infer_op.dump();
@@ -147,4 +148,4 @@ std::vector<std::string> ModuleInterpreter::getAllTensorName() {
   return ret;
 }
 
-} // namespace mlir
+} // namespace mini_mlir

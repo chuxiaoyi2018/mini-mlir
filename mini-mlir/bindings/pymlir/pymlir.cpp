@@ -7,7 +7,7 @@
 // -------------
 // pure C++ code
 // -------------
-#include "mini_mlir/Dialect/Tops/IR/TopsOps.h"
+#include "mini_mlir/Dialect/Top/IR/TopOps.h"
 #include "mini_mlir/ModuleInterpreter.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -26,6 +26,7 @@
 #include "llvm/Support/ToolOutputFile.h"
 
 using namespace mlir;
+using namespace mini_mlir;
 
 #define OP_NAME "name"
 #define OP_TYPE "type"
@@ -85,7 +86,7 @@ public:
     }
 
     DialectRegistry registry;
-    registry.insert<tops::TopsDialect, func::FuncDialect>();
+    registry.insert<top::TopDialect, func::FuncDialect>();
     context_ = std::make_unique<MLIRContext>(registry);
 
     module_ = parseSourceFile<ModuleOp>(filename, context_.get());

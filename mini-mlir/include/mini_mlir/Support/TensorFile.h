@@ -38,6 +38,7 @@
 #include <ctime>
 #include <atomic>
 #include <fstream>
+#include <set>
 
 #include <iomanip>
 template<typename T >
@@ -81,8 +82,7 @@ static bool check_type(Type eltType) {
 
 class TensorFile {
 public:
-  TensorFile(llvm::StringRef filename, std::error_code &EC, bool readOnly,
-      bool newCreate = false)
+  TensorFile(llvm::StringRef filename, std::error_code &EC, bool readOnly, bool newCreate = false)
       : filename(filename), readOnly(readOnly) {
     if (!newCreate) {
       std::ifstream f(filename.str());
@@ -237,6 +237,12 @@ public:
     return success();
   }
 
+  void getAllNames(std::set<StringRef> &names) {
+    for (auto &name : map) {
+      names.insert(name.first);
+    }
+  }
+
   /// read all tensor from file
   template<typename T>
   LogicalResult readAllTensors(
@@ -299,6 +305,56 @@ public:
     return ret;
   }
 
+  bool changed() { return cnt_update + cnt_add + cnt_del > 0; }
+
+  template <typename T>
+  void colMajorToRowMajor(T &des, const cnpy::NpyArray &src) {
+    static_assert(std::is_same<typename T::value_type, char>::value,
+                  "container value should be char");
+    assert(des.size() == src.num_bytes());
+    size_t word_size = src.word_size;
+    for (size_t src_offset = 0, src_size = src.num_vals; src_offset < src_size;
+         ++src_offset) {
+      size_t des_offset = 0;
+      size_t ind_n /*ind(0)*/ = src_offset, sub_n /*sub(0)*/ = 0;
+      for (auto n : src.shape) {
+        sub_n = ind_n % n; //  sub(n) = ind(n) % n
+        des_offset = des_offset * n + sub_n;
+        ind_n = (ind_n - sub_n) / n; // ind(n+1) = (ind(n) - sub(n)) / n
+      }
+      memcpy(des.data() + des_offset * word_size,
+             src.data_holder->data() + src_offset * word_size, word_size);
+    }
+  }
+
+  void save(const std::string &file = "") {
+    assert(!readOnly);
+    bool same_name = true;
+    if (!file.empty() && file != filename) {
+      same_name = false;
+      filename = file;
+    }
+    if (cnt_add + cnt_del + cnt_update == 0 && same_name) {
+      return;
+    }
+    for (auto &it : map) {
+      cnpy::NpyArray &array = it.second;
+      if (array.fortran_order == true) {
+        auto data_holder = std::shared_ptr<std::vector<char>>(
+            new std::vector<char>(array.num_bytes()));
+        colMajorToRowMajor(*data_holder.get(), array);
+        array.data_holder = data_holder;
+        array.fortran_order = false;
+      }
+    }
+
+    cnpy::npz_save_all(filename, map);
+    cnt_add = 0;
+    cnt_del = 0;
+    cnt_update = 0;
+    return;
+  }
+
 private:
   /// load the file
   LogicalResult load(void) {
@@ -315,6 +371,7 @@ private:
   cnpy::npz_t map;
   std::atomic<int> cnt_del = {0};
   std::atomic<int> cnt_add = {0};
+  std::atomic<int> cnt_update = {0};
 };
 
 /// Open the file specified by its name for reading. Write the error message to

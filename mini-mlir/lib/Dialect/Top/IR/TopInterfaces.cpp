@@ -7,8 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mini_mlir/Dialect/Tops/IR/TopsOps.h"
+#include "mini_mlir/Dialect/Top/IR/TopOps.h"
 #include "mini_mlir/Interfaces/InferenceInterface.h"
+#include "mini_mlir/Support/Module.h"
 
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -25,10 +26,35 @@
 #include "mini_mlir/Support/MathUtils.h"
 
 
-using namespace mlir;
+using namespace mini_mlir::top;
 
 int omp_schedule(int count) {
   return (count + omp_get_num_threads() - 1) / omp_get_num_threads();
+}
+
+// Weight op
+template <typename T> std::shared_ptr<std::vector<T>> WeightOp::read() {
+  auto op = getOperation();
+  auto type = getOutput().getType().cast<RankedTensorType>();
+  return module::weightFile().readTensor<T>(module::getName(op).str(), type);
+}
+
+std::shared_ptr<std::vector<float>> WeightOp::read_as_float() {
+  auto dtype = module::getStorageType(getOutput());
+  if (dtype.isUnsignedInteger(8)) {
+    auto data_u8 = read<uint8_t>();
+    return std::make_shared<std::vector<float>>(data_u8->begin(),
+                                                data_u8->end());
+  } else if (dtype.isInteger(8)) {
+    auto data_i8 = read<int8_t>();
+    return std::make_shared<std::vector<float>>(data_i8->begin(),
+                                                data_i8->end());
+  } else if (dtype.isF32()) {
+    return read<float>();
+  } 
+  dump();
+  llvm_unreachable("weight data not support read as float now");
+  return nullptr;
 }
 
 
@@ -40,10 +66,10 @@ template <typename T> static void relu(T *src, T *dst, size_t size) {
   }
 }
 
-LogicalResult tops::ReluOp::init(InferenceParameter &p) { return success(); }
-void tops::ReluOp::deinit(InferenceParameter &p) {}
+LogicalResult ReluOp::init(InferenceParameter &p) { return success(); }
+void ReluOp::deinit(InferenceParameter &p) {}
 
-LogicalResult tops::ReluOp::inference(InferenceParameter &p) {
+LogicalResult ReluOp::inference(InferenceParameter &p) {
   auto num_elem = getInput().getType().cast<RankedTensorType>().getNumElements();
   relu(p.inputs[0], p.outputs[0], num_elem);
   return success();
@@ -52,7 +78,7 @@ LogicalResult tops::ReluOp::inference(InferenceParameter &p) {
 
 // Add
 // see lib/Support/MathUtils.cpp   bianry_add
-LogicalResult tops::AddOp::init(InferenceParameter &p) {
+LogicalResult AddOp::init(InferenceParameter &p) {
   if (getInputs().size() == 2) {
     auto binary = new mini_mlir::Binary();
     auto lhs_shape = getInputs()[0].getType().cast<RankedTensorType>().getShape();
@@ -72,7 +98,7 @@ LogicalResult tops::AddOp::init(InferenceParameter &p) {
   }
   return success();
 }
-void tops::AddOp::deinit(InferenceParameter &p) {
+void AddOp::deinit(InferenceParameter &p) {
   if (p.handle != nullptr) {
     auto binary = (mini_mlir::Binary *)p.handle;
     delete binary;
@@ -80,7 +106,7 @@ void tops::AddOp::deinit(InferenceParameter &p) {
   }
 }
 
-LogicalResult tops::AddOp::inference(InferenceParameter &p) {
+LogicalResult AddOp::inference(InferenceParameter &p) {
   if (getInputs().size() == 2) {
     if (p.handle == nullptr) {
       return failure();
@@ -105,7 +131,7 @@ LogicalResult tops::AddOp::inference(InferenceParameter &p) {
 
 // Sub
 // see third_party/oneDNN/include/oneapi/dnnl/dnnl.hpp   bianry_sub
-LogicalResult tops::SubOp::init(InferenceParameter &p) {
+LogicalResult SubOp::init(InferenceParameter &p) {
   if (getInputs().size() == 2) {
     auto binary = new mini_mlir::Binary();
     auto lhs_shape = getInputs()[0].getType().cast<RankedTensorType>().getShape();
@@ -125,7 +151,7 @@ LogicalResult tops::SubOp::init(InferenceParameter &p) {
   }
   return success();
 }
-void tops::SubOp::deinit(InferenceParameter &p) {
+void SubOp::deinit(InferenceParameter &p) {
   if (p.handle != nullptr) {
     auto binary = (mini_mlir::Binary *)p.handle;
     delete binary;
@@ -133,7 +159,7 @@ void tops::SubOp::deinit(InferenceParameter &p) {
   }
 }
 
-LogicalResult tops::SubOp::inference(InferenceParameter &p) {
+LogicalResult SubOp::inference(InferenceParameter &p) {
   if (p.handle == nullptr) {
     return failure();
   }
@@ -145,7 +171,7 @@ LogicalResult tops::SubOp::inference(InferenceParameter &p) {
 
 // Div
 // see third_party/oneDNN/include/oneapi/dnnl/dnnl.hpp   bianry_div
-LogicalResult tops::DivOp::init(InferenceParameter &p) {
+LogicalResult DivOp::init(InferenceParameter &p) {
   if (getInputs().size() == 2) {
     auto binary = new mini_mlir::Binary();
     auto lhs_shape = getInputs()[0].getType().cast<RankedTensorType>().getShape();
@@ -165,7 +191,7 @@ LogicalResult tops::DivOp::init(InferenceParameter &p) {
   }
   return success();
 }
-void tops::DivOp::deinit(InferenceParameter &p) {
+void DivOp::deinit(InferenceParameter &p) {
   if (p.handle != nullptr) {
     auto binary = (mini_mlir::Binary *)p.handle;
     delete binary;
@@ -173,7 +199,7 @@ void tops::DivOp::deinit(InferenceParameter &p) {
   }
 }
 
-LogicalResult tops::DivOp::inference(InferenceParameter &p) {
+LogicalResult DivOp::inference(InferenceParameter &p) {
   if (p.handle == nullptr) {
     return failure();
   }
@@ -183,7 +209,7 @@ LogicalResult tops::DivOp::inference(InferenceParameter &p) {
 }
 
 
-// LogicalResult tops::MatMulOp::init(InferenceParameter &p) {
+// LogicalResult MatMulOp::init(InferenceParameter &p) {
 //   auto matmul = new dnnl::MatMul();
 //   int64_t batch, M, K, N;
 //   parseParam(batch, M, K, N);
@@ -193,7 +219,7 @@ LogicalResult tops::DivOp::inference(InferenceParameter &p) {
 //   return success();
 // }
 
-// void tops::MatMulOp::deinit(InferenceParameter &p) {
+// void MatMulOp::deinit(InferenceParameter &p) {
 //   if (p.handle != nullptr) {
 //     auto matmul = (dnnl::MatMul *)p.handle;
 //     delete matmul;
@@ -202,7 +228,7 @@ LogicalResult tops::DivOp::inference(InferenceParameter &p) {
 //   return;
 // }
 
-// LogicalResult tops::MatMulOp::inference(InferenceParameter &p) {
+// LogicalResult MatMulOp::inference(InferenceParameter &p) {
 //   if (p.handle == nullptr) {
 //     return failure();
 //   }
