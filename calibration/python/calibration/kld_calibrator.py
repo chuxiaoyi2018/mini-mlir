@@ -639,7 +639,7 @@ class ActivationCalibrator2(BaseKldCalibrator):
                 for i in range(self.input_num):
                     batched_inputs[i] += '{},'.format(inputs[i])
                     if idx == self.batch_size:
-                        x = self.ppa_list[i].run(batched_inputs[i][:-1])
+                        x = self.ppa_list[i].run(batched_inputs[i][:-1]) # [:-1] removes the "," in the last position
                         name = self.ppa_list[i].input_name
                         self.dq_activations[tune_idx][name] = [x, inp_ref_dict[name]]
                         self.ref_activations[tune_idx][name] = [x, inp_ref_dict[name]]
