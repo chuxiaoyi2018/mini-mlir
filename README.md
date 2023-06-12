@@ -1,7 +1,9 @@
 # mini-mlir
 
-#### 第二版的docker
+docker的下载地址
 http://disk-sophgo-vip.quickconnect.cn/sharing/cMgVR8Ssu
+
+#### 第二版的改动
 
 【版本改动】
 * 将所有tops都改为了top
