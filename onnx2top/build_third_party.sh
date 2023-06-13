@@ -20,7 +20,7 @@ cmake -G Ninja ../llvm \
 cmake --build . --target install
 cd ../..
 cp -r llvm-project/build/install temp
-rm -rf llvm-project/
+#rm -rf llvm-project/
 mv temp llvm
 
 # oneDNN
