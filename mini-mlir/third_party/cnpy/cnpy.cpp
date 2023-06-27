@@ -791,4 +791,3 @@ NpyArray npy_load(std::string fname) {
 }
 
 } // namespace cnpy
-

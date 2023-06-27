@@ -34,5 +34,5 @@ int main(int argc, char **argv) {
   mini_mlir::registerAllDialects(registry);
 
   return mlir::asMainReturnCode(mlir::MlirOptMain(
-      argc, argv, "Mini MLIR modular optimizer driver\n", registry, false));
+      argc, argv, "Mini MLIR modular optimizer driver\n", registry));
 }

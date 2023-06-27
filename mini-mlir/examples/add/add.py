@@ -8,8 +8,8 @@ class Model(nn.Module):
         super(Model, self).__init__()
     def forward(self, x, y):
         return x + y
-shape0 = (2, 72)
-shape1 = (2, 72)
+shape0 = (1, 2, 2, 72)
+shape1 = (1, 2, 2, 72)
 model = Model().eval()
 
 torch.onnx.export(

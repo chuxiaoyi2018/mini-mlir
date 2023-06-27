@@ -115,4 +115,3 @@ void npz_save_all(std::string zipname, npz_t &map);
 } // namespace cnpy
 
 #endif
-

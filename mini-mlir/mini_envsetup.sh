@@ -11,6 +11,7 @@ export INSTALL_PATH=${INSTALL_PATH:-$PROJECT_ROOT/install}
 # add python file to path
 export PATH=$INSTALL_PATH/bin:$PATH
 export PATH=$PROJECT_ROOT/python/tools:$PATH
+export PATH=$PROJECT_ROOT/third_party/llvm/bin:$PATH
 
 # dynamic link lib
 export LD_LIBRARY_PATH=$INSTALL_PATH/lib:$LD_LIBRARY_PATH
