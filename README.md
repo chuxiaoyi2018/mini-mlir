@@ -11,6 +11,20 @@
 
 #### 第三版
 
+可以通过下载这个来获取release包
+
+https://github.com/chuxiaoyi2018/mini-mlir/releases/tag/mini-mlir
+
 【版本改动】
 * 目前可以执行从onnx->top->tosa->llvmir->final.o
 * 添加了third_party，直接用tpu-mlir的llvm、oneDNN、cnpy
+
+examples
+```
+cd mini-mlir/examples/add
+python3 add.py
+sh onnx2mlir.sh
+sh top2tosa.sh
+sh tosa2llvmir.sh
+sh llvmir2out.sh
+```
