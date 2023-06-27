@@ -19,7 +19,17 @@ https://github.com/chuxiaoyi2018/mini-mlir/releases/tag/mini-mlir
 * 目前可以执行从onnx->top->tosa->llvmir->final.o
 * 添加了third_party，直接用tpu-mlir的llvm、oneDNN、cnpy
 
-examples
+
+how to compile the project
+```
+cd /workspace
+git clone https://github.com/chuxiaoyi2018/mini-mlir.git --depth 1
+cd mini-mlir/mini-mlir
+source mini_envsetup.sh
+./build.sh
+```
+
+run examples
 ```
 cd mini-mlir/examples/add
 python3 add.py
