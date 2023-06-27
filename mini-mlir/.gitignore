@@ -9,5 +9,4 @@ build
 install
 
 *.npz
-*.cmake
 *.onnx
