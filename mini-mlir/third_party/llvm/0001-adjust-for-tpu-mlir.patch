@@ -1,0 +1,1689 @@
+From cd55f461a94ba698848bdc3da2bb7cd010ab505d Mon Sep 17 00:00:00 2001
+From: "pengchao.hu" <pengchao.hu@sophgo.com>
+Date: Sat, 22 Apr 2023 16:49:19 +0800
+Subject: [PATCH] adjust for tpu mlir
+
+---
+ mlir/CMakeLists.txt                           |   2 +-
+ mlir/include/mlir/CMakeLists.txt              |   4 +-
+ .../mlir/Dialect/Affine/CMakeLists.txt        |   2 +-
+ .../include/mlir/Dialect/Arith/CMakeLists.txt |   2 +-
+ mlir/include/mlir/Dialect/CMakeLists.txt      |  20 -
+ mlir/include/mlir/Dialect/Func/CMakeLists.txt |   2 +-
+ .../mlir/Dialect/Linalg/CMakeLists.txt        |   2 +-
+ .../mlir/Dialect/MemRef/CMakeLists.txt        |   4 +-
+ mlir/include/mlir/Dialect/SCF/CMakeLists.txt  |   4 +-
+ .../mlir/Dialect/SparseTensor/CMakeLists.txt  |   2 +-
+ .../mlir/Dialect/Tensor/CMakeLists.txt        |   2 +-
+ mlir/include/mlir/Dialect/Tosa/CMakeLists.txt |   2 +-
+ mlir/include/mlir/InitAllDialects.h           | 110 +--
+ mlir/include/mlir/InitAllPasses.h             |  57 +-
+ .../Bindings/Python/RegisterEverything.cpp    |  10 +-
+ mlir/lib/CAPI/CMakeLists.txt                  |   2 +-
+ mlir/lib/CAPI/Dialect/CMakeLists.txt          |  99 ---
+ .../CAPI/RegisterEverything/CMakeLists.txt    |   4 +-
+ .../RegisterEverything/RegisterEverything.cpp |  10 +-
+ mlir/lib/CMakeLists.txt                       |   6 +-
+ mlir/lib/Dialect/Affine/CMakeLists.txt        |   4 +-
+ mlir/lib/Dialect/Arith/CMakeLists.txt         |   2 +-
+ mlir/lib/Dialect/Bufferization/CMakeLists.txt |   4 +-
+ mlir/lib/Dialect/CMakeLists.txt               |  21 +-
+ mlir/lib/Dialect/Func/CMakeLists.txt          |   2 +-
+ mlir/lib/Dialect/Linalg/CMakeLists.txt        |   4 +-
+ mlir/lib/Dialect/Math/CMakeLists.txt          |   2 +-
+ mlir/lib/Dialect/MemRef/CMakeLists.txt        |   4 +-
+ mlir/lib/Dialect/SCF/CMakeLists.txt           |   4 +-
+ mlir/lib/Dialect/SparseTensor/CMakeLists.txt  |   4 +-
+ mlir/lib/Dialect/Tensor/CMakeLists.txt        |   4 +-
+ mlir/lib/Dialect/Tosa/CMakeLists.txt          |   4 +-
+ mlir/lib/IR/Verifier.cpp                      |   8 +-
+ mlir/lib/Rewrite/CMakeLists.txt               |   2 +-
+ mlir/lib/Rewrite/FrozenRewritePatternSet.cpp  |   3 +-
+ mlir/lib/Tools/CMakeLists.txt                 |   8 +-
+ mlir/python/CMakeLists.txt                    | 640 +++++++++---------
+ mlir/python/mlir/ir.py                        |  21 +
+ mlir/tools/CMakeLists.txt                     |  18 +-
+ mlir/tools/mlir-opt/mlir-opt.cpp              |   3 +-
+ 40 files changed, 410 insertions(+), 698 deletions(-)
+
+diff --git a/mlir/CMakeLists.txt b/mlir/CMakeLists.txt
+index c9b0d53bc3e9..a69ae63cfdd1 100644
+--- a/mlir/CMakeLists.txt
++++ b/mlir/CMakeLists.txt
+@@ -169,7 +169,7 @@ include_directories( ${MLIR_INCLUDE_DIR})
+ # from another directory like tools
+ add_subdirectory(tools/mlir-tblgen)
+ add_subdirectory(tools/mlir-linalg-ods-gen)
+-add_subdirectory(tools/mlir-pdll)
++# add_subdirectory(tools/mlir-pdll)
+ 
+ set(MLIR_TABLEGEN_EXE "${MLIR_TABLEGEN_EXE}" CACHE INTERNAL "")
+ set(MLIR_TABLEGEN_TARGET "${MLIR_TABLEGEN_TARGET}" CACHE INTERNAL "")
+diff --git a/mlir/include/mlir/CMakeLists.txt b/mlir/include/mlir/CMakeLists.txt
+index 1e31d7c29e1e..e166510d2512 100644
+--- a/mlir/include/mlir/CMakeLists.txt
++++ b/mlir/include/mlir/CMakeLists.txt
+@@ -1,6 +1,6 @@
+-add_subdirectory(Conversion)
++# add_subdirectory(Conversion)
+ add_subdirectory(Dialect)
+ add_subdirectory(IR)
+ add_subdirectory(Interfaces)
+-add_subdirectory(Reducer)
++# add_subdirectory(Reducer)
+ add_subdirectory(Transforms)
+diff --git a/mlir/include/mlir/Dialect/Affine/CMakeLists.txt b/mlir/include/mlir/Dialect/Affine/CMakeLists.txt
+index fe1b372f6e03..968d45a5299b 100644
+--- a/mlir/include/mlir/Dialect/Affine/CMakeLists.txt
++++ b/mlir/include/mlir/Dialect/Affine/CMakeLists.txt
+@@ -1,5 +1,5 @@
+ add_subdirectory(IR)
+-add_subdirectory(TransformOps)
++#add_subdirectory(TransformOps)
+ 
+ set(LLVM_TARGET_DEFINITIONS Passes.td)
+ mlir_tablegen(Passes.h.inc -gen-pass-decls -name Affine)
+diff --git a/mlir/include/mlir/Dialect/Arith/CMakeLists.txt b/mlir/include/mlir/Dialect/Arith/CMakeLists.txt
+index 9f57627c321f..68ac6312e7a3 100644
+--- a/mlir/include/mlir/Dialect/Arith/CMakeLists.txt
++++ b/mlir/include/mlir/Dialect/Arith/CMakeLists.txt
+@@ -1,2 +1,2 @@
+ add_subdirectory(IR)
+-add_subdirectory(Transforms)
++# add_subdirectory(Transforms)
+diff --git a/mlir/include/mlir/Dialect/CMakeLists.txt b/mlir/include/mlir/Dialect/CMakeLists.txt
+index 58cc690d9a78..4ebdebba265a 100644
+--- a/mlir/include/mlir/Dialect/CMakeLists.txt
++++ b/mlir/include/mlir/Dialect/CMakeLists.txt
+@@ -1,37 +1,17 @@
+-add_subdirectory(AMDGPU)
+-add_subdirectory(AMX)
+ add_subdirectory(Affine)
+ add_subdirectory(Arith)
+-add_subdirectory(ArmNeon)
+-add_subdirectory(ArmSVE)
+-add_subdirectory(Async)
+ add_subdirectory(Bufferization)
+ add_subdirectory(Complex)
+ add_subdirectory(ControlFlow)
+-add_subdirectory(DLTI)
+-add_subdirectory(EmitC)
+ add_subdirectory(Func)
+-add_subdirectory(GPU)
+-add_subdirectory(Index)
+-add_subdirectory(IRDL)
+-add_subdirectory(LLVMIR)
+ add_subdirectory(Linalg)
+-add_subdirectory(MLProgram)
+ add_subdirectory(Math)
+ add_subdirectory(MemRef)
+-add_subdirectory(NVGPU)
+-add_subdirectory(OpenACC)
+-add_subdirectory(OpenMP)
+ add_subdirectory(PDL)
+ add_subdirectory(PDLInterp)
+ add_subdirectory(Quant)
+ add_subdirectory(SCF)
+-add_subdirectory(SPIRV)
+-add_subdirectory(Shape)
+ add_subdirectory(SparseTensor)
+ add_subdirectory(Tensor)
+ add_subdirectory(Tosa)
+-add_subdirectory(Transform)
+ add_subdirectory(Utils)
+-add_subdirectory(Vector)
+-add_subdirectory(X86Vector)
+diff --git a/mlir/include/mlir/Dialect/Func/CMakeLists.txt b/mlir/include/mlir/Dialect/Func/CMakeLists.txt
+index 9f57627c321f..68ac6312e7a3 100644
+--- a/mlir/include/mlir/Dialect/Func/CMakeLists.txt
++++ b/mlir/include/mlir/Dialect/Func/CMakeLists.txt
+@@ -1,2 +1,2 @@
+ add_subdirectory(IR)
+-add_subdirectory(Transforms)
++# add_subdirectory(Transforms)
+diff --git a/mlir/include/mlir/Dialect/Linalg/CMakeLists.txt b/mlir/include/mlir/Dialect/Linalg/CMakeLists.txt
+index f0a486df9842..72a2c066680b 100644
+--- a/mlir/include/mlir/Dialect/Linalg/CMakeLists.txt
++++ b/mlir/include/mlir/Dialect/Linalg/CMakeLists.txt
+@@ -1,5 +1,5 @@
+ add_subdirectory(IR)
+-add_subdirectory(TransformOps)
++#add_subdirectory(TransformOps)
+ 
+ set(LLVM_TARGET_DEFINITIONS Passes.td)
+ mlir_tablegen(Passes.h.inc -gen-pass-decls -name Linalg)
+diff --git a/mlir/include/mlir/Dialect/MemRef/CMakeLists.txt b/mlir/include/mlir/Dialect/MemRef/CMakeLists.txt
+index 660deb21479d..22bc6adea9db 100644
+--- a/mlir/include/mlir/Dialect/MemRef/CMakeLists.txt
++++ b/mlir/include/mlir/Dialect/MemRef/CMakeLists.txt
+@@ -1,3 +1,3 @@
+ add_subdirectory(IR)
+-add_subdirectory(TransformOps)
+-add_subdirectory(Transforms)
++# add_subdirectory(TransformOps)
++# add_subdirectory(Transforms)
+diff --git a/mlir/include/mlir/Dialect/SCF/CMakeLists.txt b/mlir/include/mlir/Dialect/SCF/CMakeLists.txt
+index 660deb21479d..22bc6adea9db 100644
+--- a/mlir/include/mlir/Dialect/SCF/CMakeLists.txt
++++ b/mlir/include/mlir/Dialect/SCF/CMakeLists.txt
+@@ -1,3 +1,3 @@
+ add_subdirectory(IR)
+-add_subdirectory(TransformOps)
+-add_subdirectory(Transforms)
++# add_subdirectory(TransformOps)
++# add_subdirectory(Transforms)
+diff --git a/mlir/include/mlir/Dialect/SparseTensor/CMakeLists.txt b/mlir/include/mlir/Dialect/SparseTensor/CMakeLists.txt
+index 9f57627c321f..68ac6312e7a3 100644
+--- a/mlir/include/mlir/Dialect/SparseTensor/CMakeLists.txt
++++ b/mlir/include/mlir/Dialect/SparseTensor/CMakeLists.txt
+@@ -1,2 +1,2 @@
+ add_subdirectory(IR)
+-add_subdirectory(Transforms)
++# add_subdirectory(Transforms)
+diff --git a/mlir/include/mlir/Dialect/Tensor/CMakeLists.txt b/mlir/include/mlir/Dialect/Tensor/CMakeLists.txt
+index 9f57627c321f..68ac6312e7a3 100644
+--- a/mlir/include/mlir/Dialect/Tensor/CMakeLists.txt
++++ b/mlir/include/mlir/Dialect/Tensor/CMakeLists.txt
+@@ -1,2 +1,2 @@
+ add_subdirectory(IR)
+-add_subdirectory(Transforms)
++# add_subdirectory(Transforms)
+diff --git a/mlir/include/mlir/Dialect/Tosa/CMakeLists.txt b/mlir/include/mlir/Dialect/Tosa/CMakeLists.txt
+index 9f57627c321f..218c20c8819f 100644
+--- a/mlir/include/mlir/Dialect/Tosa/CMakeLists.txt
++++ b/mlir/include/mlir/Dialect/Tosa/CMakeLists.txt
+@@ -1,2 +1,2 @@
+ add_subdirectory(IR)
+-add_subdirectory(Transforms)
++#add_subdirectory(Transforms)
+diff --git a/mlir/include/mlir/InitAllDialects.h b/mlir/include/mlir/InitAllDialects.h
+index 578594eee9df..7534068026db 100644
+--- a/mlir/include/mlir/InitAllDialects.h
++++ b/mlir/include/mlir/InitAllDialects.h
+@@ -14,70 +14,20 @@
+ #ifndef MLIR_INITALLDIALECTS_H_
+ #define MLIR_INITALLDIALECTS_H_
+ 
+-#include "mlir/Dialect/AMDGPU/AMDGPUDialect.h"
+-#include "mlir/Dialect/AMX/AMXDialect.h"
+ #include "mlir/Dialect/Affine/IR/AffineOps.h"
+-#include "mlir/Dialect/Affine/IR/ValueBoundsOpInterfaceImpl.h"
+-#include "mlir/Dialect/Affine/TransformOps/AffineTransformOps.h"
+ #include "mlir/Dialect/Arith/IR/Arith.h"
+-#include "mlir/Dialect/Arith/IR/ValueBoundsOpInterfaceImpl.h"
+-#include "mlir/Dialect/Arith/Transforms/BufferizableOpInterfaceImpl.h"
+-#include "mlir/Dialect/ArmNeon/ArmNeonDialect.h"
+-#include "mlir/Dialect/ArmSVE/ArmSVEDialect.h"
+-#include "mlir/Dialect/Async/IR/Async.h"
+ #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+-#include "mlir/Dialect/Bufferization/TransformOps/BufferizationTransformOps.h"
+-#include "mlir/Dialect/Bufferization/Transforms/FuncBufferizableOpInterfaceImpl.h"
+ #include "mlir/Dialect/Complex/IR/Complex.h"
+ #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
+-#include "mlir/Dialect/DLTI/DLTI.h"
+-#include "mlir/Dialect/EmitC/IR/EmitC.h"
+ #include "mlir/Dialect/Func/IR/FuncOps.h"
+-#include "mlir/Dialect/GPU/IR/GPUDialect.h"
+-#include "mlir/Dialect/GPU/TransformOps/GPUTransformOps.h"
+-#include "mlir/Dialect/IRDL/IR/IRDL.h"
+-#include "mlir/Dialect/Index/IR/IndexDialect.h"
+-#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+-#include "mlir/Dialect/LLVMIR/NVVMDialect.h"
+-#include "mlir/Dialect/LLVMIR/ROCDLDialect.h"
+ #include "mlir/Dialect/Linalg/IR/Linalg.h"
+-#include "mlir/Dialect/Linalg/IR/ValueBoundsOpInterfaceImpl.h"
+-#include "mlir/Dialect/Linalg/TransformOps/LinalgTransformOps.h"
+-#include "mlir/Dialect/Linalg/Transforms/BufferizableOpInterfaceImpl.h"
+-#include "mlir/Dialect/Linalg/Transforms/TilingInterfaceImpl.h"
+-#include "mlir/Dialect/MLProgram/IR/MLProgram.h"
+ #include "mlir/Dialect/Math/IR/Math.h"
+ #include "mlir/Dialect/MemRef/IR/MemRef.h"
+-#include "mlir/Dialect/MemRef/IR/ValueBoundsOpInterfaceImpl.h"
+-#include "mlir/Dialect/MemRef/TransformOps/MemRefTransformOps.h"
+-#include "mlir/Dialect/MemRef/Transforms/BufferizableOpInterfaceImpl.h"
+-#include "mlir/Dialect/MemRef/Transforms/RuntimeOpVerification.h"
+-#include "mlir/Dialect/NVGPU/IR/NVGPUDialect.h"
+-#include "mlir/Dialect/OpenACC/OpenACC.h"
+-#include "mlir/Dialect/OpenMP/OpenMPDialect.h"
+-#include "mlir/Dialect/PDL/IR/PDL.h"
+-#include "mlir/Dialect/PDLInterp/IR/PDLInterp.h"
+ #include "mlir/Dialect/Quant/QuantOps.h"
+ #include "mlir/Dialect/SCF/IR/SCF.h"
+-#include "mlir/Dialect/SCF/IR/ValueBoundsOpInterfaceImpl.h"
+-#include "mlir/Dialect/SCF/TransformOps/SCFTransformOps.h"
+-#include "mlir/Dialect/SCF/Transforms/BufferizableOpInterfaceImpl.h"
+-#include "mlir/Dialect/SPIRV/IR/SPIRVDialect.h"
+-#include "mlir/Dialect/Shape/IR/Shape.h"
+-#include "mlir/Dialect/Shape/Transforms/BufferizableOpInterfaceImpl.h"
+ #include "mlir/Dialect/SparseTensor/IR/SparseTensor.h"
+-#include "mlir/Dialect/SparseTensor/Transforms/BufferizableOpInterfaceImpl.h"
+ #include "mlir/Dialect/Tensor/IR/Tensor.h"
+-#include "mlir/Dialect/Tensor/IR/TensorInferTypeOpInterfaceImpl.h"
+-#include "mlir/Dialect/Tensor/IR/TensorTilingInterfaceImpl.h"
+-#include "mlir/Dialect/Tensor/IR/ValueBoundsOpInterfaceImpl.h"
+-#include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
+ #include "mlir/Dialect/Tosa/IR/TosaOps.h"
+-#include "mlir/Dialect/Transform/IR/TransformDialect.h"
+-#include "mlir/Dialect/Vector/IR/VectorOps.h"
+-#include "mlir/Dialect/Vector/TransformOps/VectorTransformOps.h"
+-#include "mlir/Dialect/Vector/Transforms/BufferizableOpInterfaceImpl.h"
+-#include "mlir/Dialect/X86Vector/X86VectorDialect.h"
+ #include "mlir/IR/Dialect.h"
+ 
+ namespace mlir {
+@@ -85,76 +35,20 @@ namespace mlir {
+ /// Add all the MLIR dialects to the provided registry.
+ inline void registerAllDialects(DialectRegistry &registry) {
+   // clang-format off
+-  registry.insert<acc::OpenACCDialect,
++  registry.insert<
+                   affine::AffineDialect,
+                   arith::ArithDialect,
+-                  amdgpu::AMDGPUDialect,
+-                  amx::AMXDialect,
+-                  arm_neon::ArmNeonDialect,
+-                  async::AsyncDialect,
+                   bufferization::BufferizationDialect,
+                   cf::ControlFlowDialect,
+                   complex::ComplexDialect,
+-                  DLTIDialect,
+-                  emitc::EmitCDialect,
+                   func::FuncDialect,
+-                  gpu::GPUDialect,
+-                  index::IndexDialect,
+-                  irdl::IRDLDialect,
+-                  LLVM::LLVMDialect,
+                   linalg::LinalgDialect,
+-                  math::MathDialect,
+                   memref::MemRefDialect,
+-                  ml_program::MLProgramDialect,
+-                  nvgpu::NVGPUDialect,
+                   scf::SCFDialect,
+-                  omp::OpenMPDialect,
+-                  pdl::PDLDialect,
+-                  pdl_interp::PDLInterpDialect,
+                   quant::QuantizationDialect,
+-                  spirv::SPIRVDialect,
+-                  arm_sve::ArmSVEDialect,
+-                  vector::VectorDialect,
+-                  NVVM::NVVMDialect,
+-                  ROCDL::ROCDLDialect,
+-                  shape::ShapeDialect,
+-                  sparse_tensor::SparseTensorDialect,
+                   tensor::TensorDialect,
+-                  transform::TransformDialect,
+-                  tosa::TosaDialect,
+-                  x86vector::X86VectorDialect>();
++                  tosa::TosaDialect>();
+   // clang-format on
+-
+-  // Register all dialect extensions.
+-  affine::registerTransformDialectExtension(registry);
+-  bufferization::registerTransformDialectExtension(registry);
+-  gpu::registerTransformDialectExtension(registry);
+-  linalg::registerTransformDialectExtension(registry);
+-  memref::registerTransformDialectExtension(registry);
+-  scf::registerTransformDialectExtension(registry);
+-  vector::registerTransformDialectExtension(registry);
+-
+-  // Register all external models.
+-  affine::registerValueBoundsOpInterfaceExternalModels(registry);
+-  arith::registerBufferizableOpInterfaceExternalModels(registry);
+-  arith::registerValueBoundsOpInterfaceExternalModels(registry);
+-  bufferization::func_ext::registerBufferizableOpInterfaceExternalModels(
+-      registry);
+-  linalg::registerBufferizableOpInterfaceExternalModels(registry);
+-  linalg::registerTilingInterfaceExternalModels(registry);
+-  linalg::registerValueBoundsOpInterfaceExternalModels(registry);
+-  memref::registerBufferizableOpInterfaceExternalModels(registry);
+-  memref::registerRuntimeVerifiableOpInterfaceExternalModels(registry);
+-  memref::registerValueBoundsOpInterfaceExternalModels(registry);
+-  scf::registerBufferizableOpInterfaceExternalModels(registry);
+-  scf::registerValueBoundsOpInterfaceExternalModels(registry);
+-  shape::registerBufferizableOpInterfaceExternalModels(registry);
+-  sparse_tensor::registerBufferizableOpInterfaceExternalModels(registry);
+-  tensor::registerBufferizableOpInterfaceExternalModels(registry);
+-  tensor::registerInferTypeOpInterfaceExternalModels(registry);
+-  tensor::registerTilingInterfaceExternalModels(registry);
+-  tensor::registerValueBoundsOpInterfaceExternalModels(registry);
+-  vector::registerBufferizableOpInterfaceExternalModels(registry);
+ }
+ 
+ /// Append all the MLIR dialects to the registry contained in the given context.
+diff --git a/mlir/include/mlir/InitAllPasses.h b/mlir/include/mlir/InitAllPasses.h
+index 216fc1232371..42068bd3dee1 100644
+--- a/mlir/include/mlir/InitAllPasses.h
++++ b/mlir/include/mlir/InitAllPasses.h
+@@ -14,30 +14,6 @@
+ #ifndef MLIR_INITALLPASSES_H_
+ #define MLIR_INITALLPASSES_H_
+ 
+-#include "mlir/Conversion/Passes.h"
+-#include "mlir/Dialect/Affine/Passes.h"
+-#include "mlir/Dialect/Arith/Transforms/Passes.h"
+-#include "mlir/Dialect/Async/Passes.h"
+-#include "mlir/Dialect/Bufferization/Transforms/Passes.h"
+-#include "mlir/Dialect/Func/Transforms/Passes.h"
+-#include "mlir/Dialect/GPU/Transforms/Passes.h"
+-#include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
+-#include "mlir/Dialect/Linalg/Passes.h"
+-#include "mlir/Dialect/MemRef/Transforms/Passes.h"
+-#include "mlir/Dialect/NVGPU/Passes.h"
+-#include "mlir/Dialect/SCF/Transforms/Passes.h"
+-#include "mlir/Dialect/SPIRV/Transforms/Passes.h"
+-#include "mlir/Dialect/Shape/Transforms/Passes.h"
+-#include "mlir/Dialect/SparseTensor/Pipelines/Passes.h"
+-#include "mlir/Dialect/SparseTensor/Transforms/Passes.h"
+-#include "mlir/Dialect/Tensor/Transforms/Passes.h"
+-#include "mlir/Dialect/Tosa/Transforms/Passes.h"
+-#include "mlir/Dialect/Transform/Transforms/Passes.h"
+-#include "mlir/Dialect/Vector/Transforms/Passes.h"
+-#include "mlir/Transforms/Passes.h"
+-
+-#include <cstdlib>
+-
+ namespace mlir {
+ 
+ // This function may be called to register the MLIR passes with the
+@@ -47,38 +23,7 @@ namespace mlir {
+ // registry, since it would already be calling the creation routine of the
+ // individual passes.
+ // The global registry is interesting to interact with the command-line tools.
+-inline void registerAllPasses() {
+-  // General passes
+-  registerTransformsPasses();
+-
+-  // Conversion passes
+-  registerConversionPasses();
+-
+-  // Dialect passes
+-  affine::registerAffinePasses();
+-  registerAsyncPasses();
+-  arith::registerArithPasses();
+-  bufferization::registerBufferizationPasses();
+-  func::registerFuncPasses();
+-  registerGPUPasses();
+-  registerGpuSerializeToCubinPass();
+-  registerGpuSerializeToHsacoPass();
+-  registerLinalgPasses();
+-  registerNVGPUPasses();
+-  registerSparseTensorPasses();
+-  LLVM::registerLLVMPasses();
+-  memref::registerMemRefPasses();
+-  registerSCFPasses();
+-  registerShapePasses();
+-  spirv::registerSPIRVPasses();
+-  tensor::registerTensorPasses();
+-  tosa::registerTosaOptPasses();
+-  transform::registerTransformPasses();
+-  vector::registerVectorPasses();
+-
+-  // Dialect pipelines
+-  sparse_tensor::registerSparseTensorPipelines();
+-}
++inline void registerAllPasses() {}
+ 
+ } // namespace mlir
+ 
+diff --git a/mlir/lib/Bindings/Python/RegisterEverything.cpp b/mlir/lib/Bindings/Python/RegisterEverything.cpp
+index fed5c36a625b..42491db65715 100644
+--- a/mlir/lib/Bindings/Python/RegisterEverything.cpp
++++ b/mlir/lib/Bindings/Python/RegisterEverything.cpp
+@@ -7,8 +7,8 @@
+ //===----------------------------------------------------------------------===//
+ 
+ #include "mlir-c/RegisterEverything.h"
+-#include "mlir-c/Conversion.h"
+-#include "mlir-c/Transforms.h"
++// #include "mlir-c/Conversion.h"
++// #include "mlir-c/Transforms.h"
+ 
+ #include "mlir/Bindings/Python/PybindAdaptors.h"
+ 
+@@ -20,7 +20,7 @@ PYBIND11_MODULE(_mlirRegisterEverything, m) {
+   });
+ 
+   // Register all passes on load.
+-  mlirRegisterAllPasses();
+-  mlirRegisterConversionPasses();
+-  mlirRegisterTransformsPasses();
++  // mlirRegisterAllPasses();
++  // mlirRegisterConversionPasses();
++  // mlirRegisterTransformsPasses();
+ }
+diff --git a/mlir/lib/CAPI/CMakeLists.txt b/mlir/lib/CAPI/CMakeLists.txt
+index 052eff327c73..f1bfeb8a8bba 100644
+--- a/mlir/lib/CAPI/CMakeLists.txt
++++ b/mlir/lib/CAPI/CMakeLists.txt
+@@ -9,7 +9,7 @@ endfunction()
+ 
+ add_subdirectory(Debug)
+ add_subdirectory(Dialect)
+-add_subdirectory(Conversion)
++# add_subdirectory(Conversion)
+ add_subdirectory(Interfaces)
+ add_subdirectory(IR)
+ add_subdirectory(RegisterEverything)
+diff --git a/mlir/lib/CAPI/Dialect/CMakeLists.txt b/mlir/lib/CAPI/Dialect/CMakeLists.txt
+index 6c8454a79aa2..8fe527445c90 100644
+--- a/mlir/lib/CAPI/Dialect/CMakeLists.txt
++++ b/mlir/lib/CAPI/Dialect/CMakeLists.txt
+@@ -1,17 +1,3 @@
+-add_mlir_upstream_c_api_library(MLIRCAPIAsync
+-  Async.cpp
+-  AsyncPasses.cpp
+-
+-  PARTIAL_SOURCES_INTENDED
+-  DEPENDS
+-  MLIRAsyncPassIncGen
+-
+-  LINK_LIBS PUBLIC
+-  MLIRCAPIIR
+-  MLIRAsyncDialect
+-  MLIRAsyncTransforms
+-  MLIRPass
+-)
+ 
+ add_mlir_upstream_c_api_library(MLIRCAPIControlFlow
+   ControlFlow.cpp
+@@ -22,52 +8,6 @@ add_mlir_upstream_c_api_library(MLIRCAPIControlFlow
+   MLIRControlFlowDialect
+ )
+ 
+-add_mlir_upstream_c_api_library(MLIRCAPIGPU
+-  GPU.cpp
+-  GPUPasses.cpp
+-
+-  PARTIAL_SOURCES_INTENDED
+-  DEPENDS
+-  MLIRGPUPassIncGen
+-
+-  LINK_LIBS PUBLIC
+-  MLIRCAPIIR
+-  MLIRGPUTransforms
+-  MLIRPass
+-)
+-
+-add_mlir_upstream_c_api_library(MLIRCAPILLVM
+-  LLVM.cpp
+-
+-  PARTIAL_SOURCES_INTENDED
+-  LINK_LIBS PUBLIC
+-  MLIRCAPIIR
+-  MLIRLLVMDialect
+-)
+-
+-add_mlir_upstream_c_api_library(MLIRCAPILinalg
+-  Linalg.cpp
+-  LinalgPasses.cpp
+-
+-  PARTIAL_SOURCES_INTENDED
+-  DEPENDS
+-  MLIRLinalgPassIncGen
+-
+-  LINK_LIBS PUBLIC
+-  MLIRCAPIIR
+-  MLIRLinalgDialect
+-  MLIRPass
+-  MLIRLinalgTransforms
+-)
+-
+-add_mlir_upstream_c_api_library(MLIRCAPIMLProgram
+-  MLProgram.cpp
+-
+-  PARTIAL_SOURCES_INTENDED
+-  LINK_LIBS PUBLIC
+-  MLIRCAPIIR
+-  MLIRMLProgramDialect
+-)
+ 
+ add_mlir_upstream_c_api_library(MLIRCAPISCF
+   SCF.cpp
+@@ -78,26 +18,6 @@ add_mlir_upstream_c_api_library(MLIRCAPISCF
+   MLIRSCFDialect
+ )
+ 
+-add_mlir_upstream_c_api_library(MLIRCAPIShape
+-  Shape.cpp
+-
+-  PARTIAL_SOURCES_INTENDED
+-  LINK_LIBS PUBLIC
+-  MLIRCAPIIR
+-  MLIRShapeDialect
+-)
+-
+-add_mlir_upstream_c_api_library(MLIRCAPISparseTensor
+-  SparseTensor.cpp
+-  SparseTensorPasses.cpp
+-
+-  PARTIAL_SOURCES_INTENDED
+-  LINK_LIBS PUBLIC
+-  MLIRCAPIIR
+-  MLIRSparseTensorDialect
+-  MLIRSparseTensorTransforms
+-)
+-
+ add_mlir_upstream_c_api_library(MLIRCAPIFunc
+   Func.cpp
+ 
+@@ -115,16 +35,6 @@ add_mlir_upstream_c_api_library(MLIRCAPITensor
+   MLIRCAPIIR
+   MLIRTensorDialect
+ )
+-
+-add_mlir_upstream_c_api_library(MLIRCAPITransformDialect
+-  Transform.cpp
+-
+-  PARTIAL_SOURCES_INTENDED
+-  LINK_LIBS PUBLIC
+-  MLIRCAPIIR
+-  MLIRTransformDialect
+-)
+-
+ add_mlir_upstream_c_api_library(MLIRCAPIQuant
+   Quant.cpp
+ 
+@@ -133,12 +43,3 @@ add_mlir_upstream_c_api_library(MLIRCAPIQuant
+   MLIRCAPIIR
+   MLIRQuantDialect
+ )
+-
+-add_mlir_upstream_c_api_library(MLIRCAPIPDL
+-  PDL.cpp
+-
+-  PARTIAL_SOURCES_INTENDED
+-  LINK_LIBS PUBLIC
+-  MLIRCAPIIR
+-  MLIRPDLDialect
+-)
+diff --git a/mlir/lib/CAPI/RegisterEverything/CMakeLists.txt b/mlir/lib/CAPI/RegisterEverything/CMakeLists.txt
+index 55fe49bcef7b..541cc4c83a05 100644
+--- a/mlir/lib/CAPI/RegisterEverything/CMakeLists.txt
++++ b/mlir/lib/CAPI/RegisterEverything/CMakeLists.txt
+@@ -10,8 +10,8 @@ add_mlir_upstream_c_api_library(MLIRCAPIRegisterEverything
+   ${translation_libs}
+   ${conversion_libs}
+ 
+-  MLIRBuiltinToLLVMIRTranslation
++  #MLIRBuiltinToLLVMIRTranslation
+   MLIRCAPIIR
+-  MLIRLLVMToLLVMIRTranslation
++  #MLIRLLVMToLLVMIRTranslation
+   MLIRCAPITransforms
+ )
+diff --git a/mlir/lib/CAPI/RegisterEverything/RegisterEverything.cpp b/mlir/lib/CAPI/RegisterEverything/RegisterEverything.cpp
+index e4a7516437cb..d9ea9853f407 100644
+--- a/mlir/lib/CAPI/RegisterEverything/RegisterEverything.cpp
++++ b/mlir/lib/CAPI/RegisterEverything/RegisterEverything.cpp
+@@ -11,17 +11,17 @@
+ #include "mlir/CAPI/IR.h"
+ #include "mlir/InitAllDialects.h"
+ #include "mlir/InitAllPasses.h"
+-#include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
+-#include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
++// #include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
++// #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
+ 
+ void mlirRegisterAllDialects(MlirDialectRegistry registry) {
+   mlir::registerAllDialects(*unwrap(registry));
+ }
+ 
+ void mlirRegisterAllLLVMTranslations(MlirContext context) {
+-  auto &ctx = *unwrap(context);
+-  mlir::registerBuiltinDialectTranslation(ctx);
+-  mlir::registerLLVMDialectTranslation(ctx);
++  // auto &ctx = *unwrap(context);
++  // mlir::registerBuiltinDialectTranslation(ctx);
++  // mlir::registerLLVMDialectTranslation(ctx);
+ }
+ 
+ void mlirRegisterAllPasses() { mlir::registerAllPasses(); }
+diff --git a/mlir/lib/CMakeLists.txt b/mlir/lib/CMakeLists.txt
+index c71664a3f006..3503d15c51b0 100644
+--- a/mlir/lib/CMakeLists.txt
++++ b/mlir/lib/CMakeLists.txt
+@@ -4,18 +4,18 @@ add_flag_if_supported("-Werror=global-constructors" WERROR_GLOBAL_CONSTRUCTOR)
+ add_subdirectory(Analysis)
+ add_subdirectory(AsmParser)
+ add_subdirectory(Bytecode)
+-add_subdirectory(Conversion)
++# add_subdirectory(Conversion)
+ add_subdirectory(Debug)
+ add_subdirectory(Dialect)
+ add_subdirectory(IR)
+ add_subdirectory(Interfaces)
+ add_subdirectory(Parser)
+ add_subdirectory(Pass)
+-add_subdirectory(Reducer)
++# add_subdirectory(Reducer)
+ add_subdirectory(Rewrite)
+ add_subdirectory(Support)
+ add_subdirectory(TableGen)
+-add_subdirectory(Target)
++# add_subdirectory(Target)
+ add_subdirectory(Tools)
+ add_subdirectory(Transforms)
+ add_subdirectory(ExecutionEngine)
+diff --git a/mlir/lib/Dialect/Affine/CMakeLists.txt b/mlir/lib/Dialect/Affine/CMakeLists.txt
+index a981040c761d..a9d49f879b0d 100644
+--- a/mlir/lib/Dialect/Affine/CMakeLists.txt
++++ b/mlir/lib/Dialect/Affine/CMakeLists.txt
+@@ -1,5 +1,5 @@
+ add_subdirectory(Analysis)
+ add_subdirectory(IR)
+-add_subdirectory(Transforms)
+-add_subdirectory(TransformOps)
++# add_subdirectory(Transforms)
++# add_subdirectory(TransformOps)
+ add_subdirectory(Utils)
+diff --git a/mlir/lib/Dialect/Arith/CMakeLists.txt b/mlir/lib/Dialect/Arith/CMakeLists.txt
+index 31167e6af908..bef3bf5230b2 100644
+--- a/mlir/lib/Dialect/Arith/CMakeLists.txt
++++ b/mlir/lib/Dialect/Arith/CMakeLists.txt
+@@ -1,3 +1,3 @@
+ add_subdirectory(IR)
+-add_subdirectory(Transforms)
++# add_subdirectory(Transforms)
+ add_subdirectory(Utils)
+diff --git a/mlir/lib/Dialect/Bufferization/CMakeLists.txt b/mlir/lib/Dialect/Bufferization/CMakeLists.txt
+index 660deb21479d..22bc6adea9db 100644
+--- a/mlir/lib/Dialect/Bufferization/CMakeLists.txt
++++ b/mlir/lib/Dialect/Bufferization/CMakeLists.txt
+@@ -1,3 +1,3 @@
+ add_subdirectory(IR)
+-add_subdirectory(TransformOps)
+-add_subdirectory(Transforms)
++# add_subdirectory(TransformOps)
++# add_subdirectory(Transforms)
+diff --git a/mlir/lib/Dialect/CMakeLists.txt b/mlir/lib/Dialect/CMakeLists.txt
+index 6f01ea7a1da1..32c116b1ebe1 100644
+--- a/mlir/lib/Dialect/CMakeLists.txt
++++ b/mlir/lib/Dialect/CMakeLists.txt
+@@ -1,40 +1,21 @@
+ add_subdirectory(Affine)
+-add_subdirectory(AMDGPU)
+ add_subdirectory(Arith)
+-add_subdirectory(ArmNeon)
+-add_subdirectory(ArmSVE)
+-add_subdirectory(Async)
+-add_subdirectory(AMX)
+ add_subdirectory(Bufferization)
+ add_subdirectory(Complex)
+ add_subdirectory(ControlFlow)
+-add_subdirectory(DLTI)
+-add_subdirectory(EmitC)
+ add_subdirectory(Func)
+-add_subdirectory(GPU)
+-add_subdirectory(Index)
+-add_subdirectory(IRDL)
+ add_subdirectory(Linalg)
+-add_subdirectory(LLVMIR)
+ add_subdirectory(Math)
+ add_subdirectory(MemRef)
+-add_subdirectory(MLProgram)
+-add_subdirectory(NVGPU)
+-add_subdirectory(OpenACC)
+-add_subdirectory(OpenMP)
+ add_subdirectory(PDL)
+ add_subdirectory(PDLInterp)
+ add_subdirectory(Quant)
+ add_subdirectory(SCF)
+-add_subdirectory(Shape)
+ add_subdirectory(SparseTensor)
+-add_subdirectory(SPIRV)
+ add_subdirectory(Tensor)
+ add_subdirectory(Tosa)
+-add_subdirectory(Transform)
+ add_subdirectory(Utils)
+-add_subdirectory(Vector)
+-add_subdirectory(X86Vector)
++
+ 
+ set(LLVM_OPTIONAL_SOURCES
+   Traits.cpp
+diff --git a/mlir/lib/Dialect/Func/CMakeLists.txt b/mlir/lib/Dialect/Func/CMakeLists.txt
+index 9f57627c321f..68ac6312e7a3 100644
+--- a/mlir/lib/Dialect/Func/CMakeLists.txt
++++ b/mlir/lib/Dialect/Func/CMakeLists.txt
+@@ -1,2 +1,2 @@
+ add_subdirectory(IR)
+-add_subdirectory(Transforms)
++# add_subdirectory(Transforms)
+diff --git a/mlir/lib/Dialect/Linalg/CMakeLists.txt b/mlir/lib/Dialect/Linalg/CMakeLists.txt
+index c47e4c5495c1..c4cfb2235862 100644
+--- a/mlir/lib/Dialect/Linalg/CMakeLists.txt
++++ b/mlir/lib/Dialect/Linalg/CMakeLists.txt
+@@ -1,4 +1,4 @@
+ add_subdirectory(IR)
+-add_subdirectory(TransformOps)
+-add_subdirectory(Transforms)
++# add_subdirectory(TransformOps)
++# add_subdirectory(Transforms)
+ add_subdirectory(Utils)
+diff --git a/mlir/lib/Dialect/Math/CMakeLists.txt b/mlir/lib/Dialect/Math/CMakeLists.txt
+index 9f57627c321f..68ac6312e7a3 100644
+--- a/mlir/lib/Dialect/Math/CMakeLists.txt
++++ b/mlir/lib/Dialect/Math/CMakeLists.txt
+@@ -1,2 +1,2 @@
+ add_subdirectory(IR)
+-add_subdirectory(Transforms)
++# add_subdirectory(Transforms)
+diff --git a/mlir/lib/Dialect/MemRef/CMakeLists.txt b/mlir/lib/Dialect/MemRef/CMakeLists.txt
+index 660deb21479d..22bc6adea9db 100644
+--- a/mlir/lib/Dialect/MemRef/CMakeLists.txt
++++ b/mlir/lib/Dialect/MemRef/CMakeLists.txt
+@@ -1,3 +1,3 @@
+ add_subdirectory(IR)
+-add_subdirectory(TransformOps)
+-add_subdirectory(Transforms)
++# add_subdirectory(TransformOps)
++# add_subdirectory(Transforms)
+diff --git a/mlir/lib/Dialect/SCF/CMakeLists.txt b/mlir/lib/Dialect/SCF/CMakeLists.txt
+index c47e4c5495c1..c4cfb2235862 100644
+--- a/mlir/lib/Dialect/SCF/CMakeLists.txt
++++ b/mlir/lib/Dialect/SCF/CMakeLists.txt
+@@ -1,4 +1,4 @@
+ add_subdirectory(IR)
+-add_subdirectory(TransformOps)
+-add_subdirectory(Transforms)
++# add_subdirectory(TransformOps)
++# add_subdirectory(Transforms)
+ add_subdirectory(Utils)
+diff --git a/mlir/lib/Dialect/SparseTensor/CMakeLists.txt b/mlir/lib/Dialect/SparseTensor/CMakeLists.txt
+index 31a59e2bb1d5..3a22ab4b9c7f 100644
+--- a/mlir/lib/Dialect/SparseTensor/CMakeLists.txt
++++ b/mlir/lib/Dialect/SparseTensor/CMakeLists.txt
+@@ -1,4 +1,4 @@
+ add_subdirectory(IR)
+-add_subdirectory(Transforms)
+-add_subdirectory(Pipelines)
++# add_subdirectory(Transforms)
++# add_subdirectory(Pipelines)
+ add_subdirectory(Utils)
+diff --git a/mlir/lib/Dialect/Tensor/CMakeLists.txt b/mlir/lib/Dialect/Tensor/CMakeLists.txt
+index 329a6c3e8025..e605818feb0c 100644
+--- a/mlir/lib/Dialect/Tensor/CMakeLists.txt
++++ b/mlir/lib/Dialect/Tensor/CMakeLists.txt
+@@ -1,4 +1,4 @@
+ add_subdirectory(IR)
+-add_subdirectory(Transforms)
+-add_subdirectory(TransformOps)
++# add_subdirectory(Transforms)
++# add_subdirectory(TransformOps)
+ add_subdirectory(Utils)
+diff --git a/mlir/lib/Dialect/Tosa/CMakeLists.txt b/mlir/lib/Dialect/Tosa/CMakeLists.txt
+index b36e4a1cabb4..46296bf54ba6 100644
+--- a/mlir/lib/Dialect/Tosa/CMakeLists.txt
++++ b/mlir/lib/Dialect/Tosa/CMakeLists.txt
+@@ -21,8 +21,8 @@ add_mlir_dialect_library(MLIRTosaDialect
+   MLIRQuantUtils
+   MLIRSideEffectInterfaces
+   MLIRTensorDialect
+-  MLIRVectorInterfaces
++  # MLIRVectorInterfaces
+   MLIRViewLikeInterface
+   )
+ 
+-add_subdirectory(Transforms)
++# add_subdirectory(Transforms)
+diff --git a/mlir/lib/IR/Verifier.cpp b/mlir/lib/IR/Verifier.cpp
+index 432d7bb28ae9..c322d239d1bb 100644
+--- a/mlir/lib/IR/Verifier.cpp
++++ b/mlir/lib/IR/Verifier.cpp
+@@ -156,10 +156,10 @@ LogicalResult OperationVerifier::verifyBlock(
+   if (mayBeValidWithoutTerminator(&block))
+     return success();
+ 
+-  Operation &terminator = block.back();
+-  if (!terminator.mightHaveTrait<OpTrait::IsTerminator>())
+-    return block.back().emitError("block with no terminator, has ")
+-           << terminator;
++  // Operation &terminator = block.back();
++  // if (!terminator.mightHaveTrait<OpTrait::IsTerminator>())
++  //   return block.back().emitError("block with no terminator, has ")
++  //          << terminator;
+ 
+   return success();
+ }
+diff --git a/mlir/lib/Rewrite/CMakeLists.txt b/mlir/lib/Rewrite/CMakeLists.txt
+index e0395be6cd6f..bd3a0c400a4e 100644
+--- a/mlir/lib/Rewrite/CMakeLists.txt
++++ b/mlir/lib/Rewrite/CMakeLists.txt
+@@ -13,6 +13,6 @@ add_mlir_library(MLIRRewrite
+   MLIRIR
+   MLIRPDLDialect
+   MLIRPDLInterpDialect
+-  MLIRPDLToPDLInterp
++  MLIRAnalysis
+   MLIRSideEffectInterfaces
+   )
+diff --git a/mlir/lib/Rewrite/FrozenRewritePatternSet.cpp b/mlir/lib/Rewrite/FrozenRewritePatternSet.cpp
+index 43840d1e8cec..e27881ecf48f 100644
+--- a/mlir/lib/Rewrite/FrozenRewritePatternSet.cpp
++++ b/mlir/lib/Rewrite/FrozenRewritePatternSet.cpp
+@@ -8,7 +8,6 @@
+ 
+ #include "mlir/Rewrite/FrozenRewritePatternSet.h"
+ #include "ByteCode.h"
+-#include "mlir/Conversion/PDLToPDLInterp/PDLToPDLInterp.h"
+ #include "mlir/Dialect/PDL/IR/PDLOps.h"
+ #include "mlir/Interfaces/SideEffectInterfaces.h"
+ #include "mlir/Pass/Pass.h"
+@@ -40,7 +39,7 @@ convertPDLToPDLInterp(ModuleOp pdlModule,
+   // mode.
+   pdlPipeline.enableVerifier(false);
+ #endif
+-  pdlPipeline.addPass(createPDLToPDLInterpPass(configMap));
++  // pdlPipeline.addPass(createPDLToPDLInterpPass(configMap));
+   if (failed(pdlPipeline.run(pdlModule)))
+     return failure();
+ 
+diff --git a/mlir/lib/Tools/CMakeLists.txt b/mlir/lib/Tools/CMakeLists.txt
+index 6175a1ce5f8d..b0a42407a475 100644
+--- a/mlir/lib/Tools/CMakeLists.txt
++++ b/mlir/lib/Tools/CMakeLists.txt
+@@ -1,10 +1,4 @@
+-add_subdirectory(lsp-server-support)
+-add_subdirectory(mlir-lsp-server)
++
+ add_subdirectory(mlir-opt)
+-add_subdirectory(mlir-pdll-lsp-server)
+-add_subdirectory(mlir-reduce)
+ add_subdirectory(mlir-tblgen)
+-add_subdirectory(mlir-translate)
+-add_subdirectory(PDLL)
+ add_subdirectory(Plugins)
+-add_subdirectory(tblgen-lsp-server)
+diff --git a/mlir/python/CMakeLists.txt b/mlir/python/CMakeLists.txt
+index 0a4c2f803641..3cb888b88239 100644
+--- a/mlir/python/CMakeLists.txt
++++ b/mlir/python/CMakeLists.txt
+@@ -46,21 +46,21 @@ declare_mlir_python_sources(MLIRPythonCAPI.HeaderSources
+ # Dialect bindings
+ ################################################################################
+ 
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/AsyncOps.td
+-  SOURCES_GLOB dialects/async_dialect/*.py
+-  DIALECT_NAME async_dialect)
+-
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/BufferizationOps.td
+-  SOURCES
+-    dialects/bufferization.py
+-    dialects/_bufferization_ops_ext.py
+-  DIALECT_NAME bufferization)
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/AsyncOps.td
++#   SOURCES_GLOB dialects/async_dialect/*.py
++#   DIALECT_NAME async_dialect)
++
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/BufferizationOps.td
++#   SOURCES
++#     dialects/bufferization.py
++#     dialects/_bufferization_ops_ext.py
++#   DIALECT_NAME bufferization)
+ 
+ declare_mlir_dialect_python_bindings(
+   ADD_TO_PARENT MLIRPythonSources.Dialects
+@@ -71,21 +71,21 @@ declare_mlir_dialect_python_bindings(
+     dialects/_builtin_ops_ext.py
+   DIALECT_NAME builtin)
+ 
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/ComplexOps.td
+-  SOURCES
+-    dialects/complex.py
+-  DIALECT_NAME complex)
+-
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/ControlFlowOps.td
+-  SOURCES
+-    dialects/cf.py
+-  DIALECT_NAME cf)
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/ComplexOps.td
++#   SOURCES
++#     dialects/complex.py
++#   DIALECT_NAME complex)
++
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/ControlFlowOps.td
++#   SOURCES
++#     dialects/cf.py
++#   DIALECT_NAME cf)
+ 
+ declare_mlir_dialect_python_bindings(
+   ADD_TO_PARENT MLIRPythonSources.Dialects
+@@ -96,87 +96,87 @@ declare_mlir_dialect_python_bindings(
+     dialects/_func_ops_ext.py
+   DIALECT_NAME func)
+ 
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/GPUOps.td
+-  SOURCES_GLOB dialects/gpu/*.py
+-  DIALECT_NAME gpu)
+-
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/LinalgOps.td
+-  SOURCES
+-    dialects/_linalg_ops_ext.py
+-  SOURCES_GLOB
+-    dialects/linalg/*.py
+-  DIALECT_NAME linalg
+-  DEPENDS LinalgOdsGen)
+-
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/TransformOps.td
+-  SOURCES
+-    dialects/_transform_ops_ext.py
+-    dialects/transform/__init__.py
+-    _mlir_libs/_mlir/dialects/transform/__init__.pyi
+-  DIALECT_NAME transform)
+-
+-declare_mlir_dialect_extension_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/SCFLoopTransformOps.td
+-  SOURCES
+-    dialects/_loop_transform_ops_ext.py
+-    dialects/transform/loop.py
+-  DIALECT_NAME transform
+-  EXTENSION_NAME loop_transform)
+-
+-declare_mlir_dialect_extension_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/LinalgStructuredTransformOps.td
+-  SOURCES
+-    dialects/_structured_transform_ops_ext.py
+-    dialects/transform/structured.py
+-  DIALECT_NAME transform
+-  EXTENSION_NAME structured_transform)
+-
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/MathOps.td
+-  SOURCES dialects/math.py
+-  DIALECT_NAME math)
+-
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/ArithOps.td
+-  SOURCES
+-    dialects/arith.py
+-    dialects/_arith_ops_ext.py
+-  DIALECT_NAME arith)
+-
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/MemRefOps.td
+-  SOURCES
+-    dialects/memref.py
+-    dialects/_memref_ops_ext.py
+-  DIALECT_NAME memref)
+-
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/MLProgramOps.td
+-  SOURCES
+-    dialects/ml_program.py
+-    dialects/_ml_program_ops_ext.py
+-  DIALECT_NAME ml_program)
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/GPUOps.td
++#   SOURCES_GLOB dialects/gpu/*.py
++#   DIALECT_NAME gpu)
++
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/LinalgOps.td
++#   SOURCES
++#     dialects/_linalg_ops_ext.py
++#   SOURCES_GLOB
++#     dialects/linalg/*.py
++#   DIALECT_NAME linalg
++#   DEPENDS LinalgOdsGen)
++
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/TransformOps.td
++#   SOURCES
++#     dialects/_transform_ops_ext.py
++#     dialects/transform/__init__.py
++#     _mlir_libs/_mlir/dialects/transform/__init__.pyi
++#   DIALECT_NAME transform)
++
++# declare_mlir_dialect_extension_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/SCFLoopTransformOps.td
++#   SOURCES
++#     dialects/_loop_transform_ops_ext.py
++#     dialects/transform/loop.py
++#   DIALECT_NAME transform
++#   EXTENSION_NAME loop_transform)
++
++# declare_mlir_dialect_extension_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/LinalgStructuredTransformOps.td
++#   SOURCES
++#     dialects/_structured_transform_ops_ext.py
++#     dialects/transform/structured.py
++#   DIALECT_NAME transform
++#   EXTENSION_NAME structured_transform)
++
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/MathOps.td
++#   SOURCES dialects/math.py
++#   DIALECT_NAME math)
++
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/ArithOps.td
++#   SOURCES
++#     dialects/arith.py
++#     dialects/_arith_ops_ext.py
++#   DIALECT_NAME arith)
++
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/MemRefOps.td
++#   SOURCES
++#     dialects/memref.py
++#     dialects/_memref_ops_ext.py
++#   DIALECT_NAME memref)
++
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/MLProgramOps.td
++#   SOURCES
++#     dialects/ml_program.py
++#     dialects/_ml_program_ops_ext.py
++#   DIALECT_NAME ml_program)
+ 
+ declare_mlir_python_sources(
+   MLIRPythonSources.Dialects.quant
+@@ -186,61 +186,61 @@ declare_mlir_python_sources(
+     dialects/quant.py
+     _mlir_libs/_mlir/dialects/quant.pyi)
+ 
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/PDLOps.td
+-  SOURCES
+-    dialects/pdl.py
+-    dialects/_pdl_ops_ext.py
+-    _mlir_libs/_mlir/dialects/pdl.pyi
+-  DIALECT_NAME pdl)
+-
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/SCFOps.td
+-  SOURCES
+-    dialects/scf.py
+-    dialects/_scf_ops_ext.py
+-  DIALECT_NAME scf)
+-
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/ShapeOps.td
+-  SOURCES dialects/shape.py
+-  DIALECT_NAME shape)
+-
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/SparseTensorOps.td
+-  SOURCES dialects/sparse_tensor.py
+-  DIALECT_NAME sparse_tensor)
+-
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/TensorOps.td
+-  SOURCES
+-    dialects/tensor.py
+-    dialects/_tensor_ops_ext.py
+-  DIALECT_NAME tensor)
+-
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/TosaOps.td
+-  SOURCES dialects/tosa.py
+-  DIALECT_NAME tosa)
+-
+-declare_mlir_dialect_python_bindings(
+-  ADD_TO_PARENT MLIRPythonSources.Dialects
+-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-  TD_FILE dialects/VectorOps.td
+-  SOURCES dialects/vector.py
+-  DIALECT_NAME vector)
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/PDLOps.td
++#   SOURCES
++#     dialects/pdl.py
++#     dialects/_pdl_ops_ext.py
++#     _mlir_libs/_mlir/dialects/pdl.pyi
++#   DIALECT_NAME pdl)
++
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/SCFOps.td
++#   SOURCES
++#     dialects/scf.py
++#     dialects/_scf_ops_ext.py
++#   DIALECT_NAME scf)
++
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/ShapeOps.td
++#   SOURCES dialects/shape.py
++#   DIALECT_NAME shape)
++
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/SparseTensorOps.td
++#   SOURCES dialects/sparse_tensor.py
++#   DIALECT_NAME sparse_tensor)
++
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/TensorOps.td
++#   SOURCES
++#     dialects/tensor.py
++#     dialects/_tensor_ops_ext.py
++#   DIALECT_NAME tensor)
++
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/TosaOps.td
++#   SOURCES dialects/tosa.py
++#   DIALECT_NAME tosa)
++
++# declare_mlir_dialect_python_bindings(
++#   ADD_TO_PARENT MLIRPythonSources.Dialects
++#   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#   TD_FILE dialects/VectorOps.td
++#   SOURCES dialects/vector.py
++#   DIALECT_NAME vector)
+ 
+ ################################################################################
+ # Python extensions.
+@@ -297,23 +297,21 @@ declare_mlir_python_extension(MLIRPythonExtension.RegisterEverything
+   PRIVATE_LINK_LIBS
+     LLVMSupport
+   EMBED_CAPI_LINK_LIBS
+-    MLIRCAPIConversion
+-    MLIRCAPITransforms
+     MLIRCAPIRegisterEverything
+ )
+ 
+-declare_mlir_python_extension(MLIRPythonExtension.Dialects.Linalg.Pybind
+-  MODULE_NAME _mlirDialectsLinalg
+-  ADD_TO_PARENT MLIRPythonSources.Dialects.linalg
+-  ROOT_DIR "${PYTHON_SOURCE_DIR}"
+-  SOURCES
+-    DialectLinalg.cpp
+-  PRIVATE_LINK_LIBS
+-    LLVMSupport
+-  EMBED_CAPI_LINK_LIBS
+-    MLIRCAPIIR
+-    MLIRCAPILinalg
+-)
++# declare_mlir_python_extension(MLIRPythonExtension.Dialects.Linalg.Pybind
++#   MODULE_NAME _mlirDialectsLinalg
++#   ADD_TO_PARENT MLIRPythonSources.Dialects.linalg
++#   ROOT_DIR "${PYTHON_SOURCE_DIR}"
++#   SOURCES
++#     DialectLinalg.cpp
++#   PRIVATE_LINK_LIBS
++#     LLVMSupport
++#   EMBED_CAPI_LINK_LIBS
++#     MLIRCAPIIR
++#     MLIRCAPILinalg
++# )
+ 
+ declare_mlir_python_extension(MLIRPythonExtension.Dialects.Quant.Pybind
+   MODULE_NAME _mlirDialectsQuant
+@@ -328,150 +326,150 @@ declare_mlir_python_extension(MLIRPythonExtension.Dialects.Quant.Pybind
+     MLIRCAPIQuant
+ )
+ 
+-declare_mlir_python_extension(MLIRPythonExtension.Dialects.PDL.Pybind
+-  MODULE_NAME _mlirDialectsPDL
+-  ADD_TO_PARENT MLIRPythonSources.Dialects.pdl
+-  ROOT_DIR "${PYTHON_SOURCE_DIR}"
+-  SOURCES
+-    DialectPDL.cpp
+-  PRIVATE_LINK_LIBS
+-    LLVMSupport
+-  EMBED_CAPI_LINK_LIBS
+-    MLIRCAPIIR
+-    MLIRCAPIPDL
+-)
+-
+-declare_mlir_python_extension(MLIRPythonExtension.Dialects.SparseTensor.Pybind
+-  MODULE_NAME _mlirDialectsSparseTensor
+-  ADD_TO_PARENT MLIRPythonSources.Dialects.sparse_tensor
+-  ROOT_DIR "${PYTHON_SOURCE_DIR}"
+-  SOURCES
+-    DialectSparseTensor.cpp
+-  PRIVATE_LINK_LIBS
+-    LLVMSupport
+-  EMBED_CAPI_LINK_LIBS
+-    MLIRCAPIIR
+-    MLIRCAPISparseTensor
+-)
+-
+-declare_mlir_python_extension(MLIRPythonExtension.Dialects.Transform.Pybind
+-  MODULE_NAME _mlirDialectsTransform
+-  ADD_TO_PARENT MLIRPythonSources.Dialects.transform
+-  ROOT_DIR "${PYTHON_SOURCE_DIR}"
+-  SOURCES
+-    DialectTransform.cpp
+-  PRIVATE_LINK_LIBS
+-    LLVMSupport
+-  EMBED_CAPI_LINK_LIBS
+-    MLIRCAPIIR
+-    MLIRCAPITransformDialect
+-)
+-
+-declare_mlir_python_extension(MLIRPythonExtension.AsyncDialectPasses
+-  MODULE_NAME _mlirAsyncPasses
+-  ADD_TO_PARENT MLIRPythonSources.Dialects.async_dialect
+-  ROOT_DIR "${PYTHON_SOURCE_DIR}"
+-  SOURCES
+-    AsyncPasses.cpp
+-  PRIVATE_LINK_LIBS
+-    LLVMSupport
+-  EMBED_CAPI_LINK_LIBS
+-    MLIRCAPIAsync
+-)
+-
+-if(MLIR_ENABLE_EXECUTION_ENGINE)
+-  declare_mlir_python_extension(MLIRPythonExtension.ExecutionEngine
+-    MODULE_NAME _mlirExecutionEngine
+-    ADD_TO_PARENT MLIRPythonSources.ExecutionEngine
+-    ROOT_DIR "${PYTHON_SOURCE_DIR}"
+-    SOURCES
+-      ExecutionEngineModule.cpp
+-    PRIVATE_LINK_LIBS
+-      LLVMSupport
+-    EMBED_CAPI_LINK_LIBS
+-      MLIRCAPIExecutionEngine
+-  )
+-endif()
+-
+-declare_mlir_python_extension(MLIRPythonExtension.GPUDialectPasses
+-  MODULE_NAME _mlirGPUPasses
+-  ADD_TO_PARENT MLIRPythonSources.Dialects.gpu
+-  ROOT_DIR "${PYTHON_SOURCE_DIR}"
+-  SOURCES
+-    GPUPasses.cpp
+-  PRIVATE_LINK_LIBS
+-    LLVMSupport
+-  EMBED_CAPI_LINK_LIBS
+-    MLIRCAPIGPU
+-)
+-
+-declare_mlir_python_extension(MLIRPythonExtension.LinalgPasses
+-  MODULE_NAME _mlirLinalgPasses
+-  ADD_TO_PARENT MLIRPythonSources.Dialects.linalg
+-  ROOT_DIR "${PYTHON_SOURCE_DIR}"
+-  SOURCES
+-    LinalgPasses.cpp
+-  PRIVATE_LINK_LIBS
+-    LLVMSupport
+-  EMBED_CAPI_LINK_LIBS
+-    MLIRCAPILinalg
+-)
+-
+-declare_mlir_python_extension(MLIRPythonExtension.SparseTensorDialectPasses
+-  MODULE_NAME _mlirSparseTensorPasses
+-  ADD_TO_PARENT MLIRPythonSources.Dialects.sparse_tensor
+-  ROOT_DIR "${PYTHON_SOURCE_DIR}"
+-  SOURCES
+-    SparseTensorPasses.cpp
+-  PRIVATE_LINK_LIBS
+-    LLVMSupport
+-  EMBED_CAPI_LINK_LIBS
+-    MLIRCAPISparseTensor
+-)
++# declare_mlir_python_extension(MLIRPythonExtension.Dialects.PDL.Pybind
++#   MODULE_NAME _mlirDialectsPDL
++#   ADD_TO_PARENT MLIRPythonSources.Dialects.pdl
++#   ROOT_DIR "${PYTHON_SOURCE_DIR}"
++#   SOURCES
++#     DialectPDL.cpp
++#   PRIVATE_LINK_LIBS
++#     LLVMSupport
++#   EMBED_CAPI_LINK_LIBS
++#     MLIRCAPIIR
++#     MLIRCAPIPDL
++# )
++
++# declare_mlir_python_extension(MLIRPythonExtension.Dialects.SparseTensor.Pybind
++#   MODULE_NAME _mlirDialectsSparseTensor
++#   ADD_TO_PARENT MLIRPythonSources.Dialects.sparse_tensor
++#   ROOT_DIR "${PYTHON_SOURCE_DIR}"
++#   SOURCES
++#     DialectSparseTensor.cpp
++#   PRIVATE_LINK_LIBS
++#     LLVMSupport
++#   EMBED_CAPI_LINK_LIBS
++#     MLIRCAPIIR
++#     MLIRCAPISparseTensor
++# )
++
++# declare_mlir_python_extension(MLIRPythonExtension.Dialects.Transform.Pybind
++#   MODULE_NAME _mlirDialectsTransform
++#   ADD_TO_PARENT MLIRPythonSources.Dialects.transform
++#   ROOT_DIR "${PYTHON_SOURCE_DIR}"
++#   SOURCES
++#     DialectTransform.cpp
++#   PRIVATE_LINK_LIBS
++#     LLVMSupport
++#   EMBED_CAPI_LINK_LIBS
++#     MLIRCAPIIR
++#     MLIRCAPITransformDialect
++# )
++
++# declare_mlir_python_extension(MLIRPythonExtension.AsyncDialectPasses
++#   MODULE_NAME _mlirAsyncPasses
++#   ADD_TO_PARENT MLIRPythonSources.Dialects.async_dialect
++#   ROOT_DIR "${PYTHON_SOURCE_DIR}"
++#   SOURCES
++#     AsyncPasses.cpp
++#   PRIVATE_LINK_LIBS
++#     LLVMSupport
++#   EMBED_CAPI_LINK_LIBS
++#     MLIRCAPIAsync
++# )
++
++# if(MLIR_ENABLE_EXECUTION_ENGINE)
++#   declare_mlir_python_extension(MLIRPythonExtension.ExecutionEngine
++#     MODULE_NAME _mlirExecutionEngine
++#     ADD_TO_PARENT MLIRPythonSources.ExecutionEngine
++#     ROOT_DIR "${PYTHON_SOURCE_DIR}"
++#     SOURCES
++#       ExecutionEngineModule.cpp
++#     PRIVATE_LINK_LIBS
++#       LLVMSupport
++#     EMBED_CAPI_LINK_LIBS
++#       MLIRCAPIExecutionEngine
++#   )
++# endif()
++
++# declare_mlir_python_extension(MLIRPythonExtension.GPUDialectPasses
++#   MODULE_NAME _mlirGPUPasses
++#   ADD_TO_PARENT MLIRPythonSources.Dialects.gpu
++#   ROOT_DIR "${PYTHON_SOURCE_DIR}"
++#   SOURCES
++#     GPUPasses.cpp
++#   PRIVATE_LINK_LIBS
++#     LLVMSupport
++#   EMBED_CAPI_LINK_LIBS
++#     MLIRCAPIGPU
++# )
++
++# declare_mlir_python_extension(MLIRPythonExtension.LinalgPasses
++#   MODULE_NAME _mlirLinalgPasses
++#   ADD_TO_PARENT MLIRPythonSources.Dialects.linalg
++#   ROOT_DIR "${PYTHON_SOURCE_DIR}"
++#   SOURCES
++#     LinalgPasses.cpp
++#   PRIVATE_LINK_LIBS
++#     LLVMSupport
++#   EMBED_CAPI_LINK_LIBS
++#     MLIRCAPILinalg
++# )
++
++# declare_mlir_python_extension(MLIRPythonExtension.SparseTensorDialectPasses
++#   MODULE_NAME _mlirSparseTensorPasses
++#   ADD_TO_PARENT MLIRPythonSources.Dialects.sparse_tensor
++#   ROOT_DIR "${PYTHON_SOURCE_DIR}"
++#   SOURCES
++#     SparseTensorPasses.cpp
++#   PRIVATE_LINK_LIBS
++#     LLVMSupport
++#   EMBED_CAPI_LINK_LIBS
++#     MLIRCAPISparseTensor
++# )
+ 
+ # TODO: Figure out how to put this in the test tree.
+ # This should not be included in the main Python extension. However,
+ # putting it into MLIRPythonTestSources along with the dialect declaration
+ # above confuses Python module loader when running under lit.
+-set(_ADDL_TEST_SOURCES)
+-if(MLIR_INCLUDE_TESTS)
+-  set(_ADDL_TEST_SOURCES MLIRPythonTestSources)
+-  declare_mlir_python_sources(MLIRPythonTestSources)
+-  declare_mlir_python_sources(MLIRPythonTestSources.Dialects
+-    ADD_TO_PARENT MLIRPythonTestSources)
+-
+-  # TODO: this uses a tablegen file from the test directory and should be
+-  # decoupled from here.
+-  declare_mlir_python_sources(
+-    MLIRPythonTestSources.Dialects.PythonTest
+-    ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
+-    ADD_TO_PARENT MLIRPythonTestSources.Dialects
+-    SOURCES dialects/python_test.py)
+-  set(LLVM_TARGET_DEFINITIONS
+-    "${MLIR_MAIN_SRC_DIR}/test/python/python_test_ops.td")
+-  mlir_tablegen(
+-    "dialects/_python_test_ops_gen.py"
+-    -gen-python-op-bindings
+-    -bind-dialect=python_test)
+-  add_public_tablegen_target(PythonTestDialectPyIncGen)
+-  declare_mlir_python_sources(
+-    MLIRPythonTestSources.Dialects.PythonTest.ops_gen
+-    ROOT_DIR "${CMAKE_CURRENT_BINARY_DIR}"
+-    ADD_TO_PARENT MLIRPythonTestSources.Dialects.PythonTest
+-    SOURCES "dialects/_python_test_ops_gen.py")
+-
+-  declare_mlir_python_extension(MLIRPythonTestSources.PythonTestExtension
+-    MODULE_NAME _mlirPythonTest
+-    ADD_TO_PARENT MLIRPythonTestSources.Dialects
+-    ROOT_DIR "${MLIR_SOURCE_DIR}/test/python/lib"
+-    SOURCES
+-      PythonTestModule.cpp
+-    PRIVATE_LINK_LIBS
+-      LLVMSupport
+-    EMBED_CAPI_LINK_LIBS
+-      MLIRCAPIPythonTestDialect
+-  )
+-endif()
++# set(_ADDL_TEST_SOURCES)
++# if(MLIR_INCLUDE_TESTS)
++#   set(_ADDL_TEST_SOURCES MLIRPythonTestSources)
++#   declare_mlir_python_sources(MLIRPythonTestSources)
++#   declare_mlir_python_sources(MLIRPythonTestSources.Dialects
++#     ADD_TO_PARENT MLIRPythonTestSources)
++
++#   # TODO: this uses a tablegen file from the test directory and should be
++#   # decoupled from here.
++#   declare_mlir_python_sources(
++#     MLIRPythonTestSources.Dialects.PythonTest
++#     ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir"
++#     ADD_TO_PARENT MLIRPythonTestSources.Dialects
++#     SOURCES dialects/python_test.py)
++#   set(LLVM_TARGET_DEFINITIONS
++#     "${MLIR_MAIN_SRC_DIR}/test/python/python_test_ops.td")
++#   mlir_tablegen(
++#     "dialects/_python_test_ops_gen.py"
++#     -gen-python-op-bindings
++#     -bind-dialect=python_test)
++#   add_public_tablegen_target(PythonTestDialectPyIncGen)
++#   declare_mlir_python_sources(
++#     MLIRPythonTestSources.Dialects.PythonTest.ops_gen
++#     ROOT_DIR "${CMAKE_CURRENT_BINARY_DIR}"
++#     ADD_TO_PARENT MLIRPythonTestSources.Dialects.PythonTest
++#     SOURCES "dialects/_python_test_ops_gen.py")
++
++#   declare_mlir_python_extension(MLIRPythonTestSources.PythonTestExtension
++#     MODULE_NAME _mlirPythonTest
++#     ADD_TO_PARENT MLIRPythonTestSources.Dialects
++#     ROOT_DIR "${MLIR_SOURCE_DIR}/test/python/lib"
++#     SOURCES
++#       PythonTestModule.cpp
++#     PRIVATE_LINK_LIBS
++#       LLVMSupport
++#     EMBED_CAPI_LINK_LIBS
++#       MLIRCAPIPythonTestDialect
++#   )
++# endif()
+ 
+ ################################################################################
+ # Common CAPI dependency DSO.
+@@ -496,7 +494,7 @@ add_mlir_python_common_capi_library(MLIRPythonCAPI
+   DECLARED_SOURCES
+     MLIRPythonSources
+     MLIRPythonExtension.RegisterEverything
+-    ${_ADDL_TEST_SOURCES}
++    #${_ADDL_TEST_SOURCES}
+ )
+ 
+ ################################################################################
+@@ -510,7 +508,7 @@ add_mlir_python_modules(MLIRPythonModules
+   DECLARED_SOURCES
+     MLIRPythonSources
+     MLIRPythonExtension.RegisterEverything
+-    ${_ADDL_TEST_SOURCES}
++    #${_ADDL_TEST_SOURCES}
+   COMMON_CAPI_LINK_LIBS
+     MLIRPythonCAPI
+ )
+diff --git a/mlir/python/mlir/ir.py b/mlir/python/mlir/ir.py
+index 1e24fcbf99e4..92b07eec84e9 100644
+--- a/mlir/python/mlir/ir.py
++++ b/mlir/python/mlir/ir.py
+@@ -31,8 +31,29 @@ def _i32Attr(x, context):
+ def _i64Attr(x, context):
+   return IntegerAttr.get(
+       IntegerType.get_signless(64, context=context), x)
++@register_attribute_builder("I64ArrayAttr")
++def _i64ArrayAttr(x, context):
++  return ArrayAttr.get([IntegerAttr.get(
++      IntegerType.get_signless(64, context=context), v) for v in x])
++
++@register_attribute_builder("F64Attr")
++def _f64Attr(x, context):
++  return FloatAttr.get_f64(x, context=context)
++
++@register_attribute_builder("F32Attr")
++def _f32Attr(x, context):
++  return FloatAttr.get_f32(x, context=context)
++
++@register_attribute_builder("F64ArrayAttr")
++def _f64ArrayAttr(x, context):
++  return ArrayAttr.get([FloatAttr.get_f64(v, context=context) for v in x])
++
++@register_attribute_builder("F32ArrayAttr")
++def _f32ArrayAttr(x, context):
++  return ArrayAttr.get([FloatAttr.get_f32(v, context=context) for v in x])
+ 
+ @register_attribute_builder("StrAttr")
++@register_attribute_builder("ReduceModeAttr")
+ def _stringAttr(x, context):
+   return StringAttr.get(x, context=context)
+ 
+diff --git a/mlir/tools/CMakeLists.txt b/mlir/tools/CMakeLists.txt
+index e9a1e4d62517..79ab4687c0cd 100644
+--- a/mlir/tools/CMakeLists.txt
++++ b/mlir/tools/CMakeLists.txt
+@@ -1,13 +1,13 @@
+-add_subdirectory(mlir-lsp-server)
++# add_subdirectory(mlir-lsp-server)
+ add_subdirectory(mlir-opt)
+-add_subdirectory(mlir-parser-fuzzer)
+-add_subdirectory(mlir-pdll-lsp-server)
+-add_subdirectory(mlir-reduce)
+-add_subdirectory(mlir-shlib)
+-add_subdirectory(mlir-spirv-cpu-runner)
+-add_subdirectory(mlir-translate)
+-add_subdirectory(mlir-vulkan-runner)
+-add_subdirectory(tblgen-lsp-server)
++# add_subdirectory(mlir-parser-fuzzer)
++# add_subdirectory(mlir-pdll-lsp-server)
++# add_subdirectory(mlir-reduce)
++# add_subdirectory(mlir-shlib)
++# add_subdirectory(mlir-spirv-cpu-runner)
++# add_subdirectory(mlir-translate)
++# add_subdirectory(mlir-vulkan-runner)
++# add_subdirectory(tblgen-lsp-server)
+ 
+ # mlir-cpu-runner requires ExecutionEngine.
+ if(MLIR_ENABLE_EXECUTION_ENGINE)
+diff --git a/mlir/tools/mlir-opt/mlir-opt.cpp b/mlir/tools/mlir-opt/mlir-opt.cpp
+index ce9008b58ba2..017422e8146e 100644
+--- a/mlir/tools/mlir-opt/mlir-opt.cpp
++++ b/mlir/tools/mlir-opt/mlir-opt.cpp
+@@ -26,7 +26,7 @@
+ 
+ using namespace llvm;
+ using namespace mlir;
+-
++#ifdef MLIR_INCLUDE_TESTS
+ // Defined in the test directory, no public header.
+ namespace mlir {
+ void registerConvertToTargetEnvPass();
+@@ -140,7 +140,6 @@ void registerTestTransformDialectExtension(DialectRegistry &);
+ void registerTestDynDialect(DialectRegistry &);
+ } // namespace test
+ 
+-#ifdef MLIR_INCLUDE_TESTS
+ void registerTestPasses() {
+   registerCloneTestPasses();
+   registerConvertToTargetEnvPass();
+-- 
+2.25.1
+
