@@ -9,7 +9,7 @@ class Model(nn.Module):
     def forward(self, x):
         z = torch.nn.functional.relu(x)
         return z
-shape0 = (2, 72)
+shape0 = (1, 2, 2, 72)
 model = Model().eval()
 
 torch.onnx.export(

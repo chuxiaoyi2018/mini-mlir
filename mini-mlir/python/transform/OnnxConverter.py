@@ -89,8 +89,10 @@ class OnnxConverter(BaseConverter):
         self.output_names = list()
         self.model = None
         self.mlir = None
+        
         self.load_onnx_model(onnx_file, input_shapes)
         self.init_MLIRImporter()
+        self.opset = self.model.opset_import[-1].version
 
         self.onnxop_factory = {
             "Add": lambda node: self.convert_add_op(node),
@@ -99,13 +101,16 @@ class OnnxConverter(BaseConverter):
             "AveragePool": lambda node: self.convert_avgpool_op(node),
             "BatchNormalization": lambda node: self.convert_batchnorm_op(node),
             "Conv": lambda node: self.convert_conv_op(node),
+            "Concat": lambda node: self.convert_concat_op(node),
             "Flatten": lambda node: self.convert_flatten_op(node),
             "Gemm": lambda node: self.convert_gemm_op(node),
             "GlobalAveragePool": lambda node: self.convert_global_avgpool_op(node),
             "GlobalMaxPool": lambda node: self.convert_global_maxpool_op(node),
+            "MatMul":lambda node:self.convert_gemm_op(node),
             "MaxPool": lambda node: self.convert_maxpool_op(node),
             "Relu": lambda node: self.convert_relu_op(node),
-            "Reshape": lambda node: self.convert_reshape_op(node)
+            "Reshape": lambda node: self.convert_reshape_op(node),
+            "Softmax": lambda node: self.convert_softmax_op(node),
         }
 
     def __del__(self):
@@ -341,9 +346,8 @@ class OnnxConverter(BaseConverter):
         self.addOperand(onnx_node.name, new_op)
 
     def convert_gemm_op(self, onnx_node):
-        assert (onnx_node.op_type == "Gemm")
-        #(M, K) * (K, N) => (M, N)
-        op = self.getOperand(onnx_node.inputs[0])
+        assert (onnx_node.op_type == "Gemm" or onnx_node.op_type == 'MatMul')
+        # (M, K) * (K, N) => (M, N)
         alpha = onnx_node.attrs.get('alpha', 1)
         beta = onnx_node.attrs.get('beta', 1)
         trans_a = onnx_node.attrs.get('transA', 0)
@@ -351,28 +355,37 @@ class OnnxConverter(BaseConverter):
         # TODO:support more situations
         assert (trans_a == 0)
         operands = list()
-        operands.append(op)
+        A = onnx_node.inputs[0]
         B = onnx_node.inputs[1]
-        assert (self.isTensor(B))
-        if trans_b == 1 or alpha != 1:
-            _tensor = self.getTensor(B)
-            if trans_b == 1:
-                _tensor = np.ascontiguousarray(np.transpose(_tensor, (1, 0)))
-            if alpha != 1:
-                _tensor *= alpha
-            B += '_fix'
-            self.addTensor(B, _tensor)
-        operands.append(self.getWeightOp(B))
+        in_op = self.getOperand(A)
+        operands.append(in_op)
+
+        if self.isWeight(B):
+            if trans_b == 1 or alpha != 1:
+                _tensor = self.getWeight(B)
+                if trans_b == 1:
+                    _tensor = np.ascontiguousarray(np.transpose(_tensor, (1, 0)))
+                if alpha != 1:
+                    _tensor *= alpha
+                B += '_fix'
+                self.addWeight(B, _tensor)
+            operands.append(self.getWeightOp(B))
+        else:
+            operands.append(self.getOperand(B))
         if len(onnx_node.inputs) > 2 and beta != 0:
             C = onnx_node.inputs[2]
-            if beta != 1:
-                _tensor = self.getTensor(C)
-                _tensor *= beta
-                C += '_fix'
-                self.addTensor(C, _tensor)
-            operands.append(self.getWeightOp(C))
+            if self.isWeight(C):
+                if beta != 1:
+                    _tensor = self.getWeight(C)
+                    _tensor *= beta
+                    C += '_fix'
+                    self.addWeight(C, _tensor)
+                operands.append(self.getWeightOp(C))
+            else:
+                operands.append(self.getOperand(C))
         else:
             operands.append(self.mlir.none_op)
+
         p = {'name': "{}_{}".format(onnx_node.name, onnx_node.op_type), 'do_relu': False}
         output_shape = self.getShape(onnx_node.name)
         new_op = self.mlir.create_matmul_op(operands, output_shape, **p)
@@ -466,4 +479,64 @@ class OnnxConverter(BaseConverter):
         assert (onnx_node.op_type == "Reshape")
         # TODO: support reshape
         raise RuntimeError("not support {}".format(onnx_node.op_type))
+    
+    def convert_softmax_op(self, onnx_node):
+        assert (onnx_node.op_type in ("Softmax"))
+        op = self.getOperand(onnx_node.inputs[0])
+        output_shape = self.getShape(onnx_node.name)
+        axis_default = -1 if self.opset >= 13 else 1
+        axis = onnx_node.attrs.get('axis', axis_default)
+        if axis < 0:
+            axis += len(output_shape)
+        p = {
+            'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+            'axis': axis,
+        }
+        new_op = self.mlir.create_softmax_op([op], output_shape, **p)
+        self.addOperand(onnx_node.name, new_op)
+    
+    def convert_concat_op(self, onnx_node):
+        assert (onnx_node.op_type == "Concat")
+        output_shape = self.getShape(onnx_node.name)
+        num_dims = len(output_shape)
+        axis = onnx_node.attrs['axis']
+        if axis < 0:
+            axis += num_dims
+        operands = list()
+        weight_data = None
+        for x in onnx_node.inputs:
+            x_shape = self.getShape(x)
+            num_elem = np.prod(x_shape)
+            if num_elem == 0:
+                print("WARNING:{}'s shape is strange {}".format(x, x_shape))
+                continue
+            if self.isWeight(x):
+                data = self.getWeight(x)
+                if weight_data is not None:
+                    weight_data = np.concatenate((weight_data, data), axis=axis)
+                else:
+                    weight_data = data
+                continue
+            else:
+                if weight_data is not None:
+                    w_name = x + "_weight"
+                    self.addWeight(w_name, weight_data)
+                    operands.append(self.getWeightOp(w_name))
+                    weight_data = None
+                operands.append(self.getOperand(x))
+        if len(operands) == 0:
+            # all weight
+            self.addWeight(onnx_node.name, weight_data)
+            return
+        if weight_data is not None:
+            w_name = onnx_node.name + "_weight"
+            self.addWeight(w_name, weight_data)
+            operands.append(self.getWeightOp(w_name))
+        if len(operands) == 1:
+            self.addOperand(onnx_node.name, operands[0])
+            return
+        p = {"name": "{}_{}".format(onnx_node.name, onnx_node.op_type), "axis": axis}
+        new_op = self.mlir.create_concat_op(operands, output_shape, **p)
+        self.addOperand(onnx_node.name, new_op)
+
 

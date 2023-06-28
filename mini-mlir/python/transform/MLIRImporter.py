@@ -10,10 +10,12 @@ class Top:
     AvgPoolOp = 'top.AvgPool'
     BatchNormOp = 'top.BatchNorm'
     ConvOp = 'top.Conv'
+    ConcatOp = 'top.Concat'
     MatMulOp = 'top.MatMul'
     MaxPoolOp = 'top.MaxPool'
     ReshapeOp = 'top.Reshape'
     ReluOp = 'top.Relu'
+    SoftmaxOp = 'top.Softmax'
 
 
 def checkType(obj, type):
@@ -43,6 +45,7 @@ class MLIRImporter(object):
         self.output_shapes = output_shapes
         self.num_input = len(self.input_shapes)
         self.num_output = len(self.output_shapes)
+        self.F32Type = F32Type.get()
         self.load_weight = dict()
         self.mlir_type = {
             "INT8": IntegerType.get_signless(8),
@@ -71,6 +74,31 @@ class MLIRImporter(object):
         if data_type == 'F64':
             return ArrayAttr.get([FloatAttr.get_f64(x) for x in data])
         raise RuntimeError("unsupport data type:{}".format(data_type))
+    
+    def get_tensor_type(self, output_shapes, type=None):
+        if type is None:
+            type = self.F32Type
+        if output_shapes == []:
+            return UnrankedTensorType.get(type)
+        if output_shapes is None:
+            return NoneType.get()
+        if isinstance(output_shapes, tuple):
+            output_shapes = list(output_shapes)
+        assert (isinstance(output_shapes, list))
+        assert (len(output_shapes) > 0)
+        if not isinstance(output_shapes[0], list) and output_shapes[0] is not None:
+            return RankedTensorType.get(tuple(output_shapes), type)
+        # multi output
+        out_types = []
+        for s in output_shapes:
+            if s == []:
+                out_types.append(UnrankedTensorType.get(type))
+            elif s is None:
+                out_types.append(NoneType.get())
+            else:
+                out_types.append(RankedTensorType.get(tuple(s), type))
+        return out_types
+
 
     def get_value_type(self, value):
         _type = str(value.type)
@@ -198,6 +226,15 @@ class MLIRImporter(object):
             param['inserts'] = self.ArrayAttr(kargs['inserts'])
         return self.buildOp(Top.ConvOp, operands, [output_type], **param)
 
+    def create_concat_op(self, operands, output_shape, **kargs):
+        output_type = self.get_tensor_type(output_shape)
+        param = {
+            'name': StringAttr.get(kargs['name']),
+            'axis': IntegerAttr.get(self.mlir_type['INT32'], kargs['axis']),
+        }
+        return self.buildOp(Top.ConcatOp, operands, [output_type], **param)
+
+
     def create_maxpool_op(self, operands, output_shape, **kargs):
         """
             operands: List[pybind.op]
@@ -240,6 +277,15 @@ class MLIRImporter(object):
         output_type = RankedTensorType.get(tuple(output_shape), self.get_value_type(operands[0]))
         reshape_name = StringAttr.get(kargs['name'])
         return self.buildOp(Top.ReshapeOp, operands, [output_type], name=reshape_name)
+
+    def create_softmax_op(self, operands, output_shape, **kargs):
+        output_type = self.get_tensor_type(output_shape)
+        param = {
+            'name': StringAttr.get(kargs['name']),
+            'axis': IntegerAttr.get(self.mlir_type['INT32'], kargs['axis']),
+        }
+        return self.buildOp(Top.SoftmaxOp, operands, [output_type], **param)
+
 
     def print_module(self):
         mlir_format = str(self.mlir_module)
@@ -293,4 +339,5 @@ class MLIRImporter(object):
         self.func_args = list()
         for i in self.entry_block.arguments:
             self.func_args.append(i)
+
 
