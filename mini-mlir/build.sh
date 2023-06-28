@@ -4,7 +4,7 @@ set -e
 PROJECT_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"
 
 if [[ -z "$INSTALL_PATH" ]]; then
-  echo "Please source envsetup.sh firstly."
+  echo "Please source mini_envsetup.sh firstly."
   exit 1
 fi
 
