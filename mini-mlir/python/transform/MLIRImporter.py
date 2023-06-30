@@ -16,7 +16,9 @@ class Top:
     ReshapeOp = 'top.Reshape'
     ReluOp = 'top.Relu'
     SoftmaxOp = 'top.Softmax'
-
+    PermuteOp = 'top.Permute'
+    ReshapeOp = 'top.Reshape'
+    LayerNormalizationOp = 'top.LayerNormalization'
 
 def checkType(obj, type):
     if not isinstance(obj, type):
@@ -286,6 +288,33 @@ class MLIRImporter(object):
         }
         return self.buildOp(Top.SoftmaxOp, operands, [output_type], **param)
 
+    def create_permute_op(self, operands, output_shape, **kargs):
+        output_type = self.get_tensor_type(output_shape)        
+        param = {
+            'name': StringAttr.get(kargs['name']),
+            'order': self.ArrayAttr(kargs['transpose_perm']),
+        }
+        return self.buildOp(Top.PermuteOp, operands, [output_type], **param)
+
+    def create_reshape_op(self, operands, output_shape, **kargs):
+        output_type = self.get_tensor_type(output_shape)        
+        param = {
+            'name': StringAttr.get(kargs['name'])
+        }
+        return self.buildOp(Top.ReshapeOp, operands, [output_type], **param)
+
+    def create_layer_norm_op(self, operands, output_shape, **kargs):
+        output_type = self.get_tensor_type(output_shape)        
+        param = {
+            'name': StringAttr.get(kargs['name'])
+        }
+        p = {
+            'name': StringAttr.get(kargs['name']),
+            'axis': IntegerAttr.get(self.mlir_type['INT32'], kargs['axis']),
+            'normalized_shape': self.ArrayAttr(kargs['normalized_shape']),
+            'eps': FloatAttr.get_f32(kargs['eps'])
+        }
+        return self.buildOp(Top.LayerNormalization, operands, [output_type], **param)
 
     def print_module(self):
         mlir_format = str(self.mlir_module)
@@ -316,21 +345,14 @@ class MLIRImporter(object):
                 args_txt += ", "
         if self.num_output > 1:
             output_txt = "({})".format(output_txt)
-        mini_func = """
-            module attributes {{module.weight_file= \"{weight_file}\", module.platform=\"{platform}\", module.state=\"{state}\", module.chip=\"{chip}\"}} {{
-                func.func @main({args}) -> {output} {{
-                    %0 = \"top.None\"() : () -> none loc(unknown)
-                }} loc(unknown)
-            }} loc(unknown)
-        """
 
-        tpu_func = """
+        mini_func = """
             module attributes {{top.weight_file= \"{weight_file}\"}} {{
                 func.func @main({args}) -> {output} {{
                     %0 = \"top.None\"() : () -> none
             }}}}
         """.format(weight_file=self.weight_file, args=args_txt, output=output_txt)
-        self.mlir_module = Module.parse(tpu_func, self.ctx)
+        self.mlir_module = Module.parse(mini_func, self.ctx)
         self.func = self.mlir_module.body.operations[0]
         self.entry_block = self.func.regions[0].blocks[0]
         self.insert_point = InsertionPoint(self.entry_block)

@@ -53,6 +53,31 @@ class BaseConverter(object):
             raise KeyError("No {} tensor in model".format(name))
         return self.tensors[name]
 
+    def addWeight(self, name, data):
+        if not isinstance(data, np.ndarray):
+            raise KeyError("tensor data must be numpy array")
+        if data.dtype != np.float32:
+            data = data.astype(np.float32)
+        if name in self.tensors:
+            if np.all(self.tensors[name] == data):
+                return
+            raise KeyError("tensor {} conflict".format(name))
+        if len(data.shape) == 0:
+            data = data.reshape([1])
+        # all weight convert to f32.
+        self.tensors[name] = data
+        self.addShape(name, data.shape)
+
+    def isWeight(self, name):
+        if name in self.tensors:
+            return True
+        return False
+
+    def getWeight(self, name):
+        if name not in self.tensors:
+            raise KeyError("No {} tensor in model".format(name))
+        return self.tensors[name]
+
     def getWeightOp(self, name):
         if name not in self.tensors:
             raise KeyError("Should addTensor first:{}!!!".format(name))

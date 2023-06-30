@@ -16,4 +16,17 @@ logits = outputs.logits
 predicted_class_idx = logits.argmax(-1).item()
 print("Predicted class:", model.config.id2label[predicted_class_idx])
 
-torch.onnx.export(model, torch.randn(1,3,224,224), 'vit-base-patch16-224.onnx', verbose=False)
+
+class vit_lite(torch.nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+    def forward(self, x):
+        x = self.model.vit.embeddings(x)
+        x = self.model.vit.encoder.layer[0](x)
+        x = self.model.vit.layernorm(x[0])
+        x = self.model.classifier(x[:,0])
+        return x
+            
+lite_model = vit_lite(model)
+torch.onnx.export(lite_model, torch.randn(1,3,224,224), 'vit-lite.onnx', verbose=False)

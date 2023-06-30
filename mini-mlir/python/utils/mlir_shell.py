@@ -58,7 +58,16 @@ def model_inference_cpu(objfile: str,
     
     lib4 = "-lm"
     cflag = "-fPIC"
-    cmd = [ccompiler, cfile, model, lib_list[0], lib_list[1], lib_list[2], lib4, cflag]
+    
+    cfile = "/workspace/mini-mlir/mini-mlir/capi/runtime_cpu.c"
+    model = objfile
+    lib1 = "/workspace/mini-mlir/mini-mlir/capi/lib/libmlir_c_runner_utils.so.17git"
+    lib2 = "/workspace/mini-mlir/mini-mlir/capi/lib/libmlir_runner_utils.so.17git"
+    lib3 = "/workspace/mini-mlir/mini-mlir/capi/lib/libmlir_float16_utils.so.17git"
+    lib4 = "-lm"
+    cflag = "-fPIC"
+    
+    cmd = [ccompiler, cfile, model, lib1, lib2, lib3, lib4, cflag]
     _os_system(cmd)
     print("Successfully generate executable file a.out!")
     # execute model inference

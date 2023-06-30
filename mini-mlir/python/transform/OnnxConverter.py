@@ -6,6 +6,7 @@ from .BaseConverter import BaseConverter
 from onnx import numpy_helper, mapping
 from numbers import Number
 import onnxsim.onnx_simplifier as onnxsim
+from .OnnxOpt import onnx_opt
 
 import onnx
 import numpy as np
@@ -111,6 +112,9 @@ class OnnxConverter(BaseConverter):
             "Relu": lambda node: self.convert_relu_op(node),
             "Reshape": lambda node: self.convert_reshape_op(node),
             "Softmax": lambda node: self.convert_softmax_op(node),
+            "Transpose": lambda node: self.convert_transpose_op(node),
+            "Reshape": lambda node: self.convert_reshape_op(node),
+            "LayerNormalization": lambda node: self.convert_layer_norm_op(node),
         }
 
     def __del__(self):
@@ -170,9 +174,18 @@ class OnnxConverter(BaseConverter):
         self.input_types = self.get_input_types(self.model)
         self.output_types = self.get_output_types(self.model)
         
+        print("begin onnxsim")
         model_simplified, is_ok = onnxsim.simplify(self.model)
+        print("end onnxsim")
+
         if is_ok:
             self.model = model_simplified
+
+        print("beginn onnxopt")
+        if is_ok:
+            # fuse ops such as layernorm gelu...
+            self.model, self.node_name_mapping = onnx_opt(self.model, True)
+        print("end onnxopt")
         # add all weight
         for tensor in self.model.graph.initializer:
             name = tensor.name
@@ -261,14 +274,25 @@ class OnnxConverter(BaseConverter):
 
     def convert_add_op(self, onnx_node):
         assert (len(onnx_node.inputs) == 2)
-        if self.isTensor(onnx_node.inputs[0]) or self.isTensor(onnx_node.inputs[1]):
-            # TODO: support tensor
-            raise RuntimeError("not support Tensor")
-        op0 = self.getOperand(onnx_node.inputs[0])
-        op1 = self.getOperand(onnx_node.inputs[1])
+        lhs = onnx_node.inputs[0]
+        rhs = onnx_node.inputs[1]
+        rhs_shape = self.getShape(rhs)
+        lhs_shape = self.getShape(lhs)
         p = {'name': "{}_{}".format(onnx_node.name, onnx_node.op_type)}
-        output_shape = self.getShape(onnx_node.name)
-        add_op = self.mlir.create_add_op([op0, op1], output_shape, **p)
+
+        if rhs_shape != lhs_shape:
+            raise ValueError("not support broadcast")
+
+        if self.isTensor(onnx_node.inputs[0]) or self.isTensor(onnx_node.inputs[1]):
+            op0 = self.getOperand(onnx_node.inputs[0])
+            op1 = self.getWeightOp(onnx_node.inputs[1])
+            output_shape = self.getShape(onnx_node.name)
+            add_op = self.mlir.create_add_op([op0, op1], output_shape, **p)
+        else:
+            op0 = self.getOperand(onnx_node.inputs[0])
+            op1 = self.getOperand(onnx_node.inputs[1])
+            output_shape = self.getShape(onnx_node.name)
+            add_op = self.mlir.create_add_op([op0, op1], output_shape, **p)
         self.addOperand(onnx_node.name, add_op)
         return
 
@@ -477,8 +501,11 @@ class OnnxConverter(BaseConverter):
 
     def convert_reshape_op(self, onnx_node):
         assert (onnx_node.op_type == "Reshape")
-        # TODO: support reshape
-        raise RuntimeError("not support {}".format(onnx_node.op_type))
+        op = self.getOperand(onnx_node.inputs[0])
+        output_shape = self.getShape(onnx_node.name)
+        p = {'name': "{}_{}".format(onnx_node.name, onnx_node.op_type)}
+        new_op = self.mlir.create_reshape_op([op], output_shape, **p)
+        self.addOperand(onnx_node.name, new_op)
     
     def convert_softmax_op(self, onnx_node):
         assert (onnx_node.op_type in ("Softmax"))
@@ -494,7 +521,23 @@ class OnnxConverter(BaseConverter):
         }
         new_op = self.mlir.create_softmax_op([op], output_shape, **p)
         self.addOperand(onnx_node.name, new_op)
-    
+
+    def convert_transpose_op(self, onnx_node):
+        assert (onnx_node.op_type in ("Transpose"))
+        op = self.getOperand(onnx_node.inputs[0])
+        input_shape = self.getShape(onnx_node.inputs[0])
+        output_shape = self.getShape(onnx_node.name)
+        # default revert it, eg: shape (2, 3, 4)->(4, 3, 2), per=[2, 1, 0]
+        perm_default = list(np.arange(len(input_shape))[::-1])
+        transpose_perm = onnx_node.attrs.get('perm', perm_default)
+        assert (len(input_shape) == len(transpose_perm))
+        p = {
+            'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+            'transpose_perm': transpose_perm,
+        }
+        new_op = self.mlir.create_permute_op([op], output_shape, **p)
+        self.addOperand(onnx_node.name, new_op)
+
     def convert_concat_op(self, onnx_node):
         assert (onnx_node.op_type == "Concat")
         output_shape = self.getShape(onnx_node.name)
@@ -539,4 +582,32 @@ class OnnxConverter(BaseConverter):
         new_op = self.mlir.create_concat_op(operands, output_shape, **p)
         self.addOperand(onnx_node.name, new_op)
 
+    def convert_layer_norm_op(self, onnx_node):
+        assert (onnx_node.op_type == "LayerNormalization")
+        assert (len(onnx_node.inputs) <= 3)
+        input_shape = self.getShape(onnx_node.inputs[0])
+        num_dims = len(input_shape)
+        axis = onnx_node.attrs.get("axis", -1)
+        if axis < 0:
+            axis += num_dims
+        normalized_shape = input_shape[axis:]
+        eps = onnx_node.attrs.get("epsilon", 1e-05)
+        if type(eps) == list and len(eps) == 1:
+            eps = eps[0]
+        # stash_type is not important
+        wb_shape = [1 if i < axis else input_shape[i] for i in range(num_dims)]
+        input_opd = self.getOperand(onnx_node.inputs[0])
+        scale_opd = self.mlir.none_op
+        bias_opd = self.mlir.none_op
+        if len(onnx_node.inputs) != 3:
+            raise ValueError(f"not support layernorm when len(onnx_node.inputs) == {len(onnx_node.inputs)}")
+        output_shape = self.getShape(onnx_node.name)
 
+        p = {
+            'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+            'axis': axis,
+            'normalized_shape': normalized_shape,
+            'eps': eps,
+        }
+        out_op = self.mlir.create_layer_norm_op([input_opd, scale_opd, bias_opd], output_shape, **p)
+        self.addOperand(onnx_node.name, out_op)
