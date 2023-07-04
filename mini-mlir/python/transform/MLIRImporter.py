@@ -367,7 +367,7 @@ class MLIRImporter(object):
             output_txt = "({})".format(output_txt)
 
         mini_func = """
-            module attributes {{top.weight_file= \"{weight_file}\"}} {{
+            module attributes {{module.weight_file= \"{weight_file}\"}} {{
                 func.func @main({args}) -> {output} {{
                     %0 = \"top.None\"() : () -> none
             }}}}

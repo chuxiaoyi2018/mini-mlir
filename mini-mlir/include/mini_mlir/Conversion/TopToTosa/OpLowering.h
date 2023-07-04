@@ -18,5 +18,6 @@ OpLowering(Softmax)
 OpLowering(Conv)
 OpLowering(Reshape)
 OpLowering(Permute)
+OpLowering(Concat)
 // clang-format on
 } // namespace mini_mlir

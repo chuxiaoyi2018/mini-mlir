@@ -10,7 +10,8 @@ void populateTopToTosaConversionPatterns(RewritePatternSet *patterns) {
         ConvLowering,
 	      SoftmaxLowering,
         ReshapeLowering,
-        PermuteLowering
+        PermuteLowering,
+        ConcatLowering
       // clang-format on
       >(patterns->getContext());
 }
@@ -234,6 +235,33 @@ void PermuteLowering::Lowering(PatternRewriter &rewriter,
   operands.push_back(constop->getResult(0));
 
   rewriter.replaceOpWithNewOp<mlir::tosa::TransposeOp>(op, outType, operands);
+}
+
+//===------------------------------------------------------------===//
+// ConcatLowering
+//===------------------------------------------------------------===//
+void ConcatLowering::Lowering(PatternRewriter &rewriter,
+                              top::ConcatOp op) const {
+  assert(op->getNumResults() == 1);
+  auto outType = change_dataformat(op->getResult(0).getType());
+  auto preType = op->getResult(0).getType();
+  auto size = preType.cast<RankedTensorType>().getShape().size();
+  int32_t new_axis, axis = op.getAxis();
+
+  if (axis > 0) 
+    new_axis = axis;
+  else
+    new_axis = size + axis;
+
+  std::vector<NamedAttribute> attrs;
+  attrs.push_back(
+      rewriter.getNamedAttr("axis", rewriter.getI64IntegerAttr(new_axis)));
+
+  std::vector<Value> operands;
+  for (auto in : op->getOperands()) {
+    operands.push_back(in);
+  }
+  rewriter.replaceOpWithNewOp<mlir::tosa::ConcatOp>(op, outType, operands, attrs);
 }
 
 //===------------------------------------------------------------===//

@@ -31,6 +31,119 @@ def Top_NoneOp : Top_Op<"None", [Pure]> {
   let results = (outs NoneType);
 }
 
+def Top_ConvOp: Top_Op<"Conv"> {
+  let summary = "Convolution operator";
+
+  let description = [{
+    In the simplest case, the output value of the layer with input size
+    $$(N, C_{\text{in}}, H, W)$$ and output $$(N, C_{\text{out}}, H_{\text{out}}, W_{\text{out}})$$
+    can be precisely described as:
+
+    ```math
+        \text{out}(N_i, C_{\text{out}_j}) = \text{bias}(C_{\text{out}_j}) +
+        \sum_{k = 0}^{C_{\text{in}} - 1} \text{weight}(C_{\text{out}_j}, k) \star \text{input}(N_i, k)
+    ```
+
+
+    where $$\star$$ is the valid 2D cross-correlation operator,
+    $$N$$ is a batch size, $$C$$ denotes a number of channels,
+    $$H$$ is a height of input planes in pixels, and $$W$$ is
+    width in pixels.
+
+    weight (Tensor): the learnable weights of the module of shape
+    $$(\text{out\_channels}, \frac{\text{in\_channels}}{\text{groups}},
+    \text{kernel\_size[0]}, \text{kernel\_size[1]})$$
+
+    bias (Tensor optional): the learnable bias of the module of shape (out_channels).
+
+    - **stride**: controls the stride for the cross-correlation, a single
+      number or a tuple.
+
+    - **padding**: controls the amount of padding applied to the input. It
+      contains four ints with top, left, bottom, right respectively.
+
+    - **dilation**: controls the spacing between the kernel points; also
+      known as the à trous algorithm. It is harder to describe, but this
+      [Link](https://github.com/vdumoulin/conv_arithmetic/blob/master/README.md)
+      has a nice visualization of what **dilation** does.
+
+    - **groups**: (optional): Number of blocked connections from input
+            channels to output channels. Default: 1
+
+
+    Shape:
+        - Input: $$(N, C_{in}, H_{in}, W_{in})$$
+        - Output: $$(N, C_{out}, H_{out}, W_{out})$$ where
+
+          ```math
+              H_{out} = \left\lfloor\frac{H_{in}  + \text{padding}[0] + \text{padding}[2] - \text{dilation}[0]
+                        \times (\text{kernel\_size}[0] - 1) - 1}{\text{stride}[0]} + 1\right\rfloor
+          ```
+          ```math
+              W_{out} = \left\lfloor\frac{W_{in}  + \text{padding}[1] + \text{padding}[3] - \text{dilation}[1]
+                        \times (\text{kernel\_size}[1] - 1) - 1}{\text{stride}[1]} + 1\right\rfloor
+          ```
+  }];
+
+  let arguments = (ins
+    AnyTensor:$input,
+    AnyTensor:$filter,
+    AnyTensorOrNone:$bias,
+    I64ArrayAttr:$kernel_shape,
+    I64ArrayAttr:$strides,
+    I64ArrayAttr:$pads, // top,left,bottom,right
+    DefaultValuedAttr<I64Attr, "1">:$group,
+    OptionalAttr<I64ArrayAttr>:$dilations,
+    DefaultValuedAttr<BoolAttr, "false">:$do_relu,
+    DefaultValuedAttr<F64Attr, "-1.0">:$relu_limit
+  );
+
+  let results = (outs AnyTensor:$output);
+  //let hasCanonicalizer = 1;
+}
+
+
+def Top_ConcatOp: Top_Op<"Concat"> {
+  let summary = "Concat operator";
+
+  let description = [{
+  Concatenates the given sequence of seq tensors in the given dimension.
+  All tensors must either have the same shape (except in the concatenating dimension) or be empty.
+  }];
+
+  let arguments = (
+    ins Variadic<AnyTensor>:$inputs,
+    DefaultValuedAttr<I32Attr, "1">:$axis,
+    DefaultValuedAttr<BoolAttr, "false">:$do_relu,
+    DefaultValuedAttr<F64Attr, "-1.0">:$relu_limit
+  );
+
+  let results = (outs AnyTensor:$output);
+  //let hasCanonicalizer = 1;
+}
+
+
+def Top_MatMulOp: Top_Op<"MatMul"> {
+  let summary = "matmul operator";
+
+  let description = [{
+    Performs a two dimensional matrix multiplication. This allows both inputs to
+    be activations, rather than reserving weights as an attribute in the
+    FULLY_CONNECTED operator.
+  }];
+
+  let arguments = (ins
+    AnyTensor:$input,
+    AnyTensor:$right,
+    AnyTensorOrNone:$bias,
+    DefaultValuedAttr<BoolAttr, "false">:$do_relu,
+    DefaultValuedAttr<F64Attr, "-1.0">:$relu_limit
+  );
+
+  let results = (outs AnyTensor:$output);
+  //let hasCanonicalizer = 1;
+}
+
 def Top_SoftmaxOp:Top_Op<"Softmax"> {
   let summary = "Softmax operation";
   let description = [{

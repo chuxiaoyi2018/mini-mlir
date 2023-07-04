@@ -36,7 +36,9 @@ int omp_schedule(int count) {
 template <typename T> std::shared_ptr<std::vector<T>> WeightOp::read() {
   auto op = getOperation();
   auto type = getOutput().getType().cast<RankedTensorType>();
-  return module::weightFile().readTensor<T>(module::getName(op).str(), type);
+  auto name = op->getAttr("name").cast<StringAttr>().getValue();
+  
+  return module::weightFile().readTensor<T>(name, type);
 }
 
 std::shared_ptr<std::vector<float>> WeightOp::read_as_float() {
