@@ -11,6 +11,7 @@ class Top:
     BatchNormOp = 'top.BatchNorm'
     ConvOp = 'top.Conv'
     ConcatOp = 'top.Concat'
+    GELUOp = 'top.GELU'
     MatMulOp = 'top.MatMul'
     MaxPoolOp = 'top.MaxPool'
     MulConstOp = 'top.MulConst'
@@ -19,7 +20,6 @@ class Top:
     SliceOp = 'top.Slice'
     SoftmaxOp = 'top.Softmax'
     PermuteOp = 'top.Permute'
-    ReshapeOp = 'top.Reshape'
     LayerNormOp = 'top.LayerNorm'
     
 
@@ -278,11 +278,6 @@ class MLIRImporter(object):
         self.insert_point.insert(return_op)
         return return_op
 
-    def create_reshape_op(self, operands, output_shape, **kargs):
-        output_type = RankedTensorType.get(tuple(output_shape), self.get_value_type(operands[0]))
-        reshape_name = StringAttr.get(kargs['name'])
-        return self.buildOp(Top.ReshapeOp, operands, [output_type], name=reshape_name)
-
     def create_softmax_op(self, operands, output_shape, **kargs):
         output_type = self.get_tensor_type(output_shape)
         param = {
@@ -333,6 +328,13 @@ class MLIRImporter(object):
             'ends': self.ArrayAttr(kargs['ends']),
         }
         return self.buildOp(Top.SliceOp, operands, [output_type], **param)
+    
+    def create_gelu_op(self, operands, output_shape, **kargs):
+        output_type = self.get_tensor_type(output_shape)
+        param = {
+            'name': StringAttr.get(kargs['name']),
+        }
+        return self.buildOp(Top.GELUOp, operands, [output_type], **param)
 
     def print_module(self):
         mlir_format = str(self.mlir_module)

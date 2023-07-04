@@ -290,4 +290,33 @@ def Top_MulConstOp: Top_Op<"MulConst"> {
   //let hasCanonicalizer = 1;
 }
 
+def Top_GELUOp : Top_Op<"GELU"> {
+  let summary = " GELU operator,  0.5x * (1.0 + tf.erf(x / tf.sqrt(2.0)))";
+  let description = [{
+     Y = 0.5x * (1.0 + tf.erf(x / tf.sqrt(2.0)))
+  }];
+  let arguments = (
+    ins AnyTensor:$input
+  );
+
+  let results = (outs AnyTensor:$output);
+}
+
+def Top_GatherOp: Top_Op<"Gather"> {
+  let summary = "Gather operator";
+  let description = [{
+    Perform Gather operation on the given axis.
+  }];
+
+  let arguments = (ins
+    AnyTensor:$input,
+    AnyTensor:$indices,
+
+    DefaultValuedAttr<I64Attr, "0">:$axis
+  );
+
+  let results = (outs AnyTensor:$output);
+  //let hasCanonicalizer = 1;
+}
+
 #endif // Top_OPS

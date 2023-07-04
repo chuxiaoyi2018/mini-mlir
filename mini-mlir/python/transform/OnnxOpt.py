@@ -627,6 +627,22 @@ def TorchLayerNormPattern(patterns: list):
                    src_nodes=[_reducemean_0, _sub, _pow, _reducemean_1, _add_0, _sqrt, _div],
                    dst_nodes=[layernorm]))
 
+############ torch.GELU ############
+def TorchGELUPattern(patterns: list):
+    gelu_input = OuterNode()
+    div_tensor = OuterNode(is_tensor=True)
+    add_tensor = OuterNode(tensor_value=1)
+    mul_tensor = OuterNode(tensor_value=0.5)
+
+    _div = PatternNode("Div", [gelu_input, div_tensor])
+    _erf = PatternNode("Erf", [_div])
+    _add = PatternNode("Add", [_erf, add_tensor])
+    _mu_0 = PatternNode("Mul", [gelu_input, _add])
+    _mul_1 = PatternNode("Mul", [_mu_0, mul_tensor])
+    gelu = PatternNode("GELU", [gelu_input])
+    patterns.append(
+        ReformInfo(name="GELU", src_nodes=[_div, _erf, _add, _mu_0, _mul_1], dst_nodes=[gelu]))
+
 def remove_tensor_from_input(model):
     tensor_names = [x.name for x in model.graph.initializer]
     tensor_names.extend([x.name for x in model.graph.node if x.op_type == "Constant"])
@@ -644,6 +660,7 @@ def onnx_opt(model, dump=False, rigorous=True):
     # add your patterns here if you expect that your patterns actually works
     pattern_functions = [
         TorchLayerNormPattern,
+        TorchGELUPattern
     ]
 
     patterns = []

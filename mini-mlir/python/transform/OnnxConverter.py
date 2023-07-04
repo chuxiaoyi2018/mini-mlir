@@ -105,7 +105,9 @@ class OnnxConverter(BaseConverter):
             "Conv": lambda node: self.convert_conv_op(node),
             "Concat": lambda node: self.convert_concat_op(node),
             "Flatten": lambda node: self.convert_flatten_op(node),
+            "Gather": lambda node: self.convert_gather_op(node),
             "Gemm": lambda node: self.convert_gemm_op(node),
+            "GELU": lambda node: self.convert_gelu_op(node),
             "GlobalAveragePool": lambda node: self.convert_global_avgpool_op(node),
             "GlobalMaxPool": lambda node: self.convert_global_maxpool_op(node),
             "MatMul":lambda node:self.convert_gemm_op(node),
@@ -286,14 +288,15 @@ class OnnxConverter(BaseConverter):
             self.convert_add_op(onnx_node)
             return
 
-        if not self.isWeight(onnx_node.inputs[0]) or self.isWeight(onnx_node.inputs[1]):
-            op0 = self.getOperand(onnx_node.inputs[0])
-            op1 = self.getWeightOp(onnx_node.inputs[1])
-            output_shape = self.getShape(onnx_node.name)
-            add_op = self.mlir.create_add_op([op0, op1], output_shape, **p)
-        else:
+        
+        if not self.isWeight(onnx_node.inputs[0]) and not self.isWeight(onnx_node.inputs[1]):
             op0 = self.getOperand(onnx_node.inputs[0])
             op1 = self.getOperand(onnx_node.inputs[1])
+            output_shape = self.getShape(onnx_node.name)
+            add_op = self.mlir.create_add_op([op0, op1], output_shape, **p)
+        elif not self.isWeight(onnx_node.inputs[0]) or self.isWeight(onnx_node.inputs[1]):
+            op0 = self.getOperand(onnx_node.inputs[0])
+            op1 = self.getWeightOp(onnx_node.inputs[1])
             output_shape = self.getShape(onnx_node.name)
             add_op = self.mlir.create_add_op([op0, op1], output_shape, **p)
         self.addOperand(onnx_node.name, add_op)
@@ -670,4 +673,51 @@ class OnnxConverter(BaseConverter):
             self.addOperand(name, new_op)
 
 
+    def convert_gelu_op(self, onnx_node):
+        # 0.5 * val * (1.0 + std::erf(val / std::sqrt(2.0)));
+        assert (onnx_node.op_type == "GELU")
+        assert (len(onnx_node.inputs) == 1)
+        operand = self.getOperand(onnx_node.inputs[0])
+        output_shape = self.getShape(onnx_node.name)
+        p = {
+            'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+        }
+        new_op = self.mlir.create_gelu_op([operand], output_shape, **p) 
+        self.addOperand(onnx_node.name, new_op)
 
+    def convert_gather_op(self, onnx_node):
+        assert (onnx_node.op_type == "Gather")
+        in0 = self.getOperand(onnx_node.inputs[0])
+        in0_shape = self.getShape(onnx_node.inputs[0])
+        out_shape = self.getShape(onnx_node.name)
+        axis = onnx_node.attrs.get('axis', 0)
+
+        if self.isScalar(onnx_node.inputs[1]):
+            offset = int(self.getScalar(onnx_node.inputs[1]))
+            if offset < 0:
+                offset = in0_shape[axis] + offset
+            slice_offset = [0] * len(in0_shape)
+            slice_step = [1] * len(in0_shape)
+            slice_end = [in0_shape[i] for i in range(len(in0_shape))]
+            slice_offset[axis] = offset
+            slice_end[axis] = offset + 1
+            slice_shape = list(np.take(np.ones(in0_shape), np.array([offset]), axis=axis).shape)
+
+            # add slice
+            p = {
+                'name': "{}_Slice_{}".format(onnx_node.name, onnx_node.op_type),
+                'offset': list(slice_offset),
+                'steps': list(slice_step),
+                'ends': list(slice_end),
+            }
+            slice_op = self.mlir.create_slice_op([in0]+[self.mlir.none_op]*3, slice_shape, **p)
+            # add reshape
+            p = {
+                'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+            }
+            new_op = self.mlir.create_reshape_op([slice_op], out_shape, **p)
+            self.addOperand(onnx_node.name, new_op)
+            return
+        else:
+            raise RuntimeError("not support now")
+        
