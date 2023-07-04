@@ -8,6 +8,7 @@ from numbers import Number
 import onnxsim.onnx_simplifier as onnxsim
 from .OnnxOpt import onnx_opt
 
+
 import onnx
 import numpy as np
 
@@ -111,6 +112,7 @@ class OnnxConverter(BaseConverter):
             "MaxPool": lambda node: self.convert_maxpool_op(node),
             "Relu": lambda node: self.convert_relu_op(node),
             "Reshape": lambda node: self.convert_reshape_op(node),
+            "Split": lambda node: self.convert_split_op(node),
             "Softmax": lambda node: self.convert_softmax_op(node),
             "Transpose": lambda node: self.convert_transpose_op(node),
             "Reshape": lambda node: self.convert_reshape_op(node),
@@ -253,18 +255,17 @@ class OnnxConverter(BaseConverter):
 
         def NoneAndRaise(node):
             raise RuntimeError("{} Op not support now".format(node.op_type))
-
         for n in self.model.graph.node:
             node = OnnxNode(n)
             self.onnxop_factory.get(node.op_type, lambda x: NoneAndRaise(x))(node)
-
+        
         # add return op
         return_op = list()
         # Set output
         for idx, _name in enumerate(self.output_names):
             op = self.getOperand(_name)
             return_op.append(op)
-
+        
         self.mlir.create_return_op(return_op)
         mlir_txt = self.mlir.print_module()
         with open(self.mlir_file, "w") as f:
@@ -280,10 +281,12 @@ class OnnxConverter(BaseConverter):
         lhs_shape = self.getShape(lhs)
         p = {'name': "{}_{}".format(onnx_node.name, onnx_node.op_type)}
 
-        if rhs_shape != lhs_shape:
-            raise ValueError("not support broadcast")
+        if self.isWeight(lhs) and not self.isWeight(rhs):
+            onnx_node.inputs[0], onnx_node.inputs[1] = onnx_node.inputs[1], onnx_node.inputs[0]
+            self.convert_add_op(onnx_node)
+            return
 
-        if self.isTensor(onnx_node.inputs[0]) or self.isTensor(onnx_node.inputs[1]):
+        if not self.isWeight(onnx_node.inputs[0]) or self.isWeight(onnx_node.inputs[1]):
             op0 = self.getOperand(onnx_node.inputs[0])
             op1 = self.getWeightOp(onnx_node.inputs[1])
             output_shape = self.getShape(onnx_node.name)
@@ -311,15 +314,31 @@ class OnnxConverter(BaseConverter):
 
     def convert_div_op(self, onnx_node):
         assert (len(onnx_node.inputs) == 2)
-        if self.isTensor(onnx_node.inputs[0]) or self.isTensor(onnx_node.inputs[1]):
-            # TODO: support tensor
-            raise RuntimeError("not support Tensor")
-        op0 = self.getOperand(onnx_node.inputs[0])
-        op1 = self.getOperand(onnx_node.inputs[1])
-        p = {'name': "{}_{}".format(onnx_node.name, onnx_node.op_type)}
-        output_shape = self.getShape(onnx_node.name)
-        add_op = self.mlir.create_div_op([op0, op1], output_shape, **p)
-        self.addOperand(onnx_node.name, add_op)
+        lhs = onnx_node.inputs[0]
+        rhs = onnx_node.inputs[1]
+        rhs_shape = self.getShape(rhs)
+        lhs_shape = self.getShape(lhs)
+        if not self.isWeight(onnx_node.inputs[0]) and not self.isWeight(onnx_node.inputs[1]):
+            op0 = self.getOperand(onnx_node.inputs[0])
+            op1 = self.getOperand(onnx_node.inputs[1])
+            p = {'name': "{}_{}".format(onnx_node.name, onnx_node.op_type)}
+            output_shape = self.getShape(onnx_node.name)
+            div_op = self.mlir.create_div_op([op0, op1], output_shape, **p)
+        elif not self.isWeight(onnx_node.inputs[0]) and self.isWeight(onnx_node.inputs[1]):
+            if len(rhs_shape) == 0:
+                op0 = self.getOperand(onnx_node.inputs[0])
+                op1 = self.getWeight(onnx_node.inputs[1])
+                p = {
+                    'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+                    'const_val': 1 / self.getWeight(rhs).flatten()[0],
+                }
+                output_shape = self.getShape(onnx_node.name)
+                div_op = self.mlir.create_mulconst_op([op0], output_shape, **p)
+            else:
+                raise RuntimeError("not support Tensor")
+        else:
+            RuntimeError("not support Tensor")
+        self.addOperand(onnx_node.name, div_op)
         return
 
     def convert_batchnorm_op(self, onnx_node):
@@ -611,3 +630,44 @@ class OnnxConverter(BaseConverter):
         }
         out_op = self.mlir.create_layer_norm_op([input_opd, scale_opd, bias_opd], output_shape, **p)
         self.addOperand(onnx_node.name, out_op)
+
+
+    def convert_split_op(self, onnx_node):
+        assert (onnx_node.op_type == "Split")
+        input_shape = self.getShape(onnx_node.inputs[0])
+        num_output = len(onnx_node.outputs)
+        num_dims = len(input_shape)
+        axis = onnx_node.attrs['axis']
+        if axis < 0:
+            axis += num_dims
+        slice = input_shape[axis] // num_output
+        split = None
+        # to avoid the case that split attr in input
+        if len(onnx_node.inputs) > 1:
+            split = self.getWeight(onnx_node.inputs[1]).astype(int)
+        else:
+            split = onnx_node.attrs.get('split', [slice] * num_output)
+        op = self.getOperand(onnx_node.inputs[0])
+
+        offset = 0
+        # replace the split with slice
+        for i, name in zip(split, onnx_node.outputs):
+            output_shape = list(input_shape)
+            output_shape[axis] = i
+            slice_offset = [0] * num_dims
+            slice_offset[axis] = offset
+            slice_step = [1] * num_dims
+            slice_end = [input_shape[i] for i in range(num_dims)]
+            offset = offset + i
+            slice_end[axis] = offset
+            p = {
+                'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+                'offset': list(slice_offset),
+                'steps': list(slice_step),
+                'ends': list(slice_end),
+            }
+            new_op = self.mlir.create_slice_op([op]+[self.mlir.none_op]*3, output_shape, **p) 
+            self.addOperand(name, new_op)
+
+
+

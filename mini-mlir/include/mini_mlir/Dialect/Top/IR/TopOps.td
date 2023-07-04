@@ -31,6 +31,72 @@ def Top_NoneOp : Top_Op<"None", [Pure]> {
   let results = (outs NoneType);
 }
 
+def Top_SoftmaxOp:Top_Op<"Softmax"> {
+  let summary = "Softmax operation";
+  let description = [{
+    Integrates some operations related to softmax.
+  }];
+  let arguments = (ins
+    AnyTensor:$input,
+    I32Attr:$axis,
+    DefaultValuedAttr<BoolAttr, "false">:$log,
+    DefaultValuedAttr<F64Attr, "1.0">:$beta
+  );
+  let results = (outs AnyTensor:$output);
+}
+
+def Top_ReshapeOp:Top_Op<"Reshape"> {
+  let summary = "Reshape operation";
+  let description = [{
+    Returns a tensor with the same type/values as the input, with a new shape
+    specified by the shape argument. Reshape may operate on tensors of any rank.
+    No data conversion happens during a reshape operation.
+    0: keep dim from input
+    -1: left dim from input
+  }];
+  let arguments = (ins
+    AnyTensor:$input,
+    OptionalAttr<I64ArrayAttr>:$shape
+  );
+  let results = (outs AnyTensor:$output);
+  //let hasCanonicalizer = 1;
+}
+
+def Top_LayerNormOp : Top_Op<"LayerNorm"> {
+  let summary = "LayerNorm operation";
+  let description = [{
+    layer normalization
+  }];
+  let arguments = (ins
+    AnyTensor:$input,
+    AnyTensorOrNone:$weight,
+    AnyTensorOrNone:$bias,
+    I64ArrayAttr:$normalized_shape,
+    I32Attr:$axis,
+    F32Attr:$eps
+  );
+  let results = (outs
+    AnyTensor:$output
+  );
+  //let hasCanonicalizer = 1;
+}
+
+def Top_TransposeOp: Top_Op<"Transpose"> {
+
+  let summary = "Transpose operator";
+
+  let description = [{
+      Transpose on input.
+  }];
+
+  let arguments = (
+    ins AnyTensor:$input,
+    SI32Attr:$dim0,
+    SI32Attr:$dim1
+  );
+  let results = (outs AnyTensor:$output);
+}
+
 def Top_WeightOp : Top_Op<"Weight", [Pure]> {
   let summary = "load weight operator";
 
@@ -150,6 +216,78 @@ def Top_SubOp: Top_Op<"Sub", [Pure,
   );
 
   let results = (outs AnyTensor:$output);
+}
+
+def Top_PermuteOp: Top_Op<"Permute"> {
+
+  let summary = "Permute operator";
+
+  let description = [{
+      Perform permute on input.
+  }];
+
+  let arguments = (
+    ins AnyTensor:$input,
+    I64ArrayAttr:$order
+  );
+  let results = (outs AnyTensor:$output);
+  //let hasCanonicalizer = 1;
+  //let extraClassDeclaration = [{
+  //  permute_attr_t parseParam();
+  //}];
+}
+
+def Top_SliceOp: Top_Op<"Slice"> {
+  let summary = "Slice operator";
+
+  let description = [{
+    Slice Operation on input.
+  }];
+
+  let arguments = (
+    ins AnyTensor:$input,
+    AnyTensorOrNone:$offsetT,
+    AnyTensorOrNone:$endsT,
+    AnyTensorOrNone:$stepsT,
+    I64ArrayAttr:$offset,
+    I64ArrayAttr:$steps,
+    I64ArrayAttr:$ends
+  );
+  let results = (outs AnyTensor:$output);
+  //let hasCanonicalizer = 1;
+}
+
+def Top_SplitOp: Top_Op<"Split"> {
+  let summary = "Split operator";
+
+  let description = [{
+    Split input tensor into a list of tensors.
+  }];
+
+  let arguments = (
+    ins AnyTensor:$input,
+    SI32Attr:$axis,
+    I64Attr:$num,
+    OptionalAttr<I64ArrayAttr>:$split_size
+  );
+  let results = (outs Variadic<AnyTensor>:$outputs);
+  //let hasCanonicalizer = 1;
+}
+
+def Top_MulConstOp: Top_Op<"MulConst"> {
+  let summary = "Mul Const operator";
+
+  let description = [{
+    Y = X * const_val
+  }];
+
+  let arguments = (
+    ins AnyTensor:$input,
+    F64Attr: $const_val
+  );
+
+  let results = (outs AnyTensor:$output);
+  //let hasCanonicalizer = 1;
 }
 
 #endif // Top_OPS

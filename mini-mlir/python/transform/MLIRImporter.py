@@ -13,12 +13,15 @@ class Top:
     ConcatOp = 'top.Concat'
     MatMulOp = 'top.MatMul'
     MaxPoolOp = 'top.MaxPool'
+    MulConstOp = 'top.MulConst'
     ReshapeOp = 'top.Reshape'
     ReluOp = 'top.Relu'
+    SliceOp = 'top.Slice'
     SoftmaxOp = 'top.Softmax'
     PermuteOp = 'top.Permute'
     ReshapeOp = 'top.Reshape'
-    LayerNormalizationOp = 'top.LayerNormalization'
+    LayerNormOp = 'top.LayerNorm'
+    
 
 def checkType(obj, type):
     if not isinstance(obj, type):
@@ -306,15 +309,30 @@ class MLIRImporter(object):
     def create_layer_norm_op(self, operands, output_shape, **kargs):
         output_type = self.get_tensor_type(output_shape)        
         param = {
-            'name': StringAttr.get(kargs['name'])
-        }
-        p = {
             'name': StringAttr.get(kargs['name']),
             'axis': IntegerAttr.get(self.mlir_type['INT32'], kargs['axis']),
             'normalized_shape': self.ArrayAttr(kargs['normalized_shape']),
             'eps': FloatAttr.get_f32(kargs['eps'])
         }
-        return self.buildOp(Top.LayerNormalization, operands, [output_type], **param)
+        return self.buildOp(Top.LayerNormOp, operands, [output_type], **param)
+
+    def create_mulconst_op(self, operands, output_shape, **kargs):
+        output_type = self.get_tensor_type(output_shape)
+        param = {
+            'name': StringAttr.get(kargs['name']),
+            'const_val': FloatAttr.get_f64(kargs['const_val'])
+        }
+        return self.buildOp(Top.MulConstOp, operands, [output_type], **param)
+
+    def create_slice_op(self, operands, output_shape, **kargs):
+        output_type = self.get_tensor_type(output_shape)
+        param = {
+            'name': StringAttr.get(kargs['name']),
+            'offset': self.ArrayAttr(kargs['offset']),
+            'steps': self.ArrayAttr(kargs['steps']),
+            'ends': self.ArrayAttr(kargs['ends']),
+        }
+        return self.buildOp(Top.SliceOp, operands, [output_type], **param)
 
     def print_module(self):
         mlir_format = str(self.mlir_module)

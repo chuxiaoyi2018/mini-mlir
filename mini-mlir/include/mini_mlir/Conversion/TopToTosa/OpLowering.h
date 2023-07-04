@@ -14,5 +14,6 @@ void populateTopToTosaConversionPatterns(RewritePatternSet *patterns);
 // clang-format off
 OpLowering(Input)
 OpLowering(Add)
+OpLowering(Softmax)
 // clang-format on
 } // namespace mini_mlir

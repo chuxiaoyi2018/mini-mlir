@@ -73,4 +73,23 @@ static float* change_weight(std::shared_ptr<std::vector<float>> valptr,
   return new_val;
 }
 
+static std::vector<NamedAttribute> gen_clamp_attr(PatternRewriter &rewriter,
+                      Type newType, ::llvm::APFloat relu_limit) {
+  std::vector<NamedAttribute> clamp_attr;
+  clamp_attr.push_back(rewriter.getNamedAttr("min_int", rewriter.getI64IntegerAttr(0)));
+  clamp_attr.push_back(rewriter.getNamedAttr("max_int", rewriter.getI64IntegerAttr(0)));
+  clamp_attr.push_back(rewriter.getNamedAttr("min_fp", rewriter.getF32FloatAttr(0)));
+  auto floatType = newType.cast<RankedTensorType>().getElementType().cast<FloatType>();
+  const llvm::fltSemantics &semantic = floatType.getFloatSemantics();
+  auto zero = llvm::APFloat::getZero(relu_limit.getSemantics());   // Negative = false
+  if (relu_limit < zero) {
+    clamp_attr.push_back(rewriter.getNamedAttr("max_fp",
+        rewriter.getFloatAttr(floatType, APFloat::getInf(semantic)))); // Negative = false
+  } else {
+    clamp_attr.push_back(rewriter.getNamedAttr("max_fp",
+        rewriter.getFloatAttr(floatType, relu_limit)));
+  }
+  return clamp_attr;
+}
+
 } // namespace mini_mlir
