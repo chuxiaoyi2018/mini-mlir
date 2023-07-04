@@ -31,6 +31,14 @@ State getState();
 void setState(State state);
 bool isState(State state);
 
+
+//-----------------------------------------------------------------
+// Helper for Array
+//-----------------------------------------------------------------
+i64_array_t getI64Array(ArrayAttr arrayAttr);
+i64_array_t getI64Array(llvm::Optional<ArrayAttr> arrayAttr, int64_t num_elem,
+                        int64_t default_value);
+
 //-----------------------------------------------------------------
 // Helper Functions for ModuleOp
 //-----------------------------------------------------------------

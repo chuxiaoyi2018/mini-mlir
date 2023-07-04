@@ -44,7 +44,6 @@ void init(ModuleOp module) {
   platform = Platform::ONNX;
 }
 
-
 //-----------------------------------------------------------------
 // Helper for get/set Attributes
 //-----------------------------------------------------------------
@@ -60,6 +59,32 @@ void setState(State state) {
 
 bool isState(State state) { return state == getState(); }
 
+//-----------------------------------------------------------------
+// Helper for Array
+//-----------------------------------------------------------------
+i64_array_t getI64Array(ArrayAttr arrayAttr) {
+  auto data = std::make_shared<std::vector<int64_t>>();
+  for (auto en : llvm::enumerate(arrayAttr)) {
+    auto attr = en.value().dyn_cast<IntegerAttr>();
+    if (attr) {
+      data->push_back(attr.getInt());
+    } else {
+      arrayAttr.dump();
+      llvm_unreachable("not int64_t type");
+    }
+  }
+  return std::move(data);
+}
+
+i64_array_t getI64Array(Optional<ArrayAttr> arrayAttr, int64_t num_elem,
+                        int64_t default_value) {
+  if (arrayAttr.has_value()) {
+    auto arr = getI64Array(arrayAttr.value());
+    assert(arr->size() == num_elem);
+    return std::move(arr);
+  }
+  return std::make_shared<std::vector<int64_t>>(num_elem, default_value);
+}
 
 //-----------------------------------------------------------------
 // Helper Functions for ModuleOp
