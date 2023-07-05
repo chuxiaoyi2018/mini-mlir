@@ -11,12 +11,16 @@ class Top:
     BatchNormOp = 'top.BatchNorm'
     ConvOp = 'top.Conv'
     ConcatOp = 'top.Concat'
+    ErfOp = 'top.Erf'
     GELUOp = 'top.GELU'
     MatMulOp = 'top.MatMul'
     MaxPoolOp = 'top.MaxPool'
     MulConstOp = 'top.MulConst'
+    MulOp = 'top.Mul'
+    ReduceMeanOp = 'top.ReduceMean'
     ReshapeOp = 'top.Reshape'
     ReluOp = 'top.Relu'
+    SqrtOp = 'top.Sqrt'
     SliceOp = 'top.Slice'
     SoftmaxOp = 'top.Softmax'
     PermuteOp = 'top.Permute'
@@ -311,6 +315,13 @@ class MLIRImporter(object):
         }
         return self.buildOp(Top.LayerNormOp, operands, [output_type], **param)
 
+    def create_mul_op(self, operands, output_shape, **kargs):
+        output_type = self.get_tensor_type(output_shape)
+        param = {
+            'name': StringAttr.get(kargs['name'])
+        }
+        return self.buildOp(Top.MulOp, operands, [output_type], **param)
+
     def create_mulconst_op(self, operands, output_shape, **kargs):
         output_type = self.get_tensor_type(output_shape)
         param = {
@@ -335,7 +346,29 @@ class MLIRImporter(object):
             'name': StringAttr.get(kargs['name']),
         }
         return self.buildOp(Top.GELUOp, operands, [output_type], **param)
-
+    
+    def create_reduce_mean_op(self, operands, output_shape, **kargs):
+        output_type = self.get_tensor_type(output_shape)
+        param = {
+            'name': StringAttr.get(kargs['name']),
+            'axis': IntegerAttr.get(self.mlir_type['INT32'], kargs['axis'])
+        }
+        return self.buildOp(Top.ReduceMeanOp, operands, [output_type], **param)
+    
+    def create_sqrt_op(self, operands, output_shape, **kargs):
+        output_type = self.get_tensor_type(output_shape)
+        param = {
+            'name': StringAttr.get(kargs['name'])
+        }
+        return self.buildOp(Top.ReduceMeanOp, operands, [output_type], **param)
+    
+    def create_erf_op(self, operands, output_shape, **kargs):
+        output_type = self.get_tensor_type(output_shape)
+        param = {
+            'name': StringAttr.get(kargs['name'])
+        }
+        return self.buildOp(Top.ErfOp, operands, [output_type], **param)
+    
     def print_module(self):
         mlir_format = str(self.mlir_module)
         return mlir_format

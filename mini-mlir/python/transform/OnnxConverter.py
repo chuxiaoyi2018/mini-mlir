@@ -100,23 +100,28 @@ class OnnxConverter(BaseConverter):
             "Add": lambda node: self.convert_add_op(node),
             "Sub": lambda node: self.convert_sub_op(node),
             "Div": lambda node: self.convert_div_op(node),
-            "AveragePool": lambda node: self.convert_avgpool_op(node),
+            "AveragePool": lambda node: self.convert_reduce_mean_op(node),
             "BatchNormalization": lambda node: self.convert_batchnorm_op(node),
             "Conv": lambda node: self.convert_conv_op(node),
             "Concat": lambda node: self.convert_concat_op(node),
+            "Erf": lambda node: self.convert_erf_op(node),
             "Flatten": lambda node: self.convert_flatten_op(node),
             "Gather": lambda node: self.convert_gather_op(node),
             "Gemm": lambda node: self.convert_gemm_op(node),
             "GELU": lambda node: self.convert_gelu_op(node),
             "GlobalAveragePool": lambda node: self.convert_global_avgpool_op(node),
             "GlobalMaxPool": lambda node: self.convert_global_maxpool_op(node),
+            "Mul":lambda node:self.convert_mul_op(node),
             "MatMul":lambda node:self.convert_gemm_op(node),
             "MaxPool": lambda node: self.convert_maxpool_op(node),
+            "ReduceMean": lambda node: self.convert_reduce_mean_op(node),
             "Relu": lambda node: self.convert_relu_op(node),
             "Reshape": lambda node: self.convert_reshape_op(node),
+            "Sqrt": lambda node: self.convert_sqrt_op(node),
             "Split": lambda node: self.convert_split_op(node),
             "Softmax": lambda node: self.convert_softmax_op(node),
             "Transpose": lambda node: self.convert_transpose_op(node),
+            "Pow": lambda node: self.convert_pow_op(node),
             "Reshape": lambda node: self.convert_reshape_op(node),
             "LayerNormalization": lambda node: self.convert_layer_norm_op(node),
         }
@@ -188,7 +193,8 @@ class OnnxConverter(BaseConverter):
         print("beginn onnxopt")
         if is_ok:
             # fuse ops such as layernorm gelu...
-            self.model, self.node_name_mapping = onnx_opt(self.model, True)
+            # self.model, self.node_name_mapping = onnx_opt(self.model, True)
+            pass
         print("end onnxopt")
         # add all weight
         for tensor in self.model.graph.initializer:
@@ -721,3 +727,108 @@ class OnnxConverter(BaseConverter):
         else:
             raise RuntimeError("not support now")
         
+    def convert_reduce_mean_op(self, onnx_node):
+        assert (onnx_node.op_type =="ReduceMean")
+        output_shape = self.getShape(onnx_node.name)
+
+        operand = self.getOperand(onnx_node.inputs[0])
+        input_shape = self.getShape(onnx_node.inputs[0])
+        num_dims = len(input_shape)
+        axes = onnx_node.attrs.get("axes", [-1])
+
+        # axes : list  
+        # axis : int
+        if axes == [-1]:
+            axis = axes[0]
+            if axis < 0:
+                axis += num_dims
+            p = {
+                'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+                'axis': axis
+            }
+            new_op = self.mlir.create_reduce_mean_op([operand], output_shape, **p)
+            self.addOperand(onnx_node.name, new_op)
+        else:
+            raise RuntimeError("not support now")
+
+    def convert_pow_op(self, onnx_node):
+        assert (onnx_node.op_type == "Pow")
+        assert (len(onnx_node.inputs) == 2)
+        base = onnx_node.inputs[0]
+        expn = onnx_node.inputs[1]
+        if self.isScalar(expn):
+            base_op = self.getOperand(base)
+            expn_const = self.getScalar(expn)
+            output_shape = self.getShape(onnx_node.name)
+            if expn_const == 2.0:
+                p = {
+                    'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+                }
+                mul_op = self.mlir.create_mul_op([base_op, base_op], output_shape, **p)
+                self.addOperand(onnx_node.name, mul_op)
+                return
+            else:
+                raise RuntimeError("Not implemented")
+        else:
+            raise RuntimeError("Not implemented")
+        
+    def convert_sqrt_op(self, onnx_node):
+        assert (onnx_node.op_type == "Sqrt")
+        operand = self.getOperand(onnx_node.inputs[0])
+        output_shape = self.getShape(onnx_node.name)
+        p = {
+            'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+        }
+        sqrt_op = self.mlir.create_mul_op([operand], output_shape, **p)
+        self.addOperand(onnx_node.name, sqrt_op)
+
+    def convert_mul_op(self, onnx_node):
+        assert (onnx_node.op_type == "Mul")
+        assert (len(onnx_node.inputs) == 2)
+        lhs = onnx_node.inputs[0]
+        rhs = onnx_node.inputs[1]
+        lhs_shape = self.getShape(lhs)
+        rhs_shape = self.getShape(rhs)
+        if self.isWeight(lhs) and not self.isWeight(rhs):
+            onnx_node.inputs[0], onnx_node.inputs[1] = rhs, lhs
+            self.convert_mul_op(onnx_node)
+            return
+
+        op0 = self.getOperand(lhs)
+        output_shape = self.getShape(onnx_node.name)
+
+        if (not self.isWeight(lhs)) and self.isWeight(rhs):
+            # weight reorder for tosa
+            if len(lhs_shape) == 3 and (len(rhs_shape) == 1 or len(rhs_shape) == 0):
+                weight = self.getWeight(rhs)
+                weight = weight.reshape(1,1,-1)
+                self.tensors[rhs] = weight
+                weight_op = self.getWeightOp(rhs)
+                p = {
+                    'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+                }
+                mul_op = self.mlir.create_mul_op([op0, weight_op], output_shape, **p)
+                self.addOperand(onnx_node.name, mul_op)
+                return
+            else:
+                raise RuntimeError("not support now")
+        else:
+            if lhs_shape == rhs_shape:
+                op1 = self.getOperand(rhs)
+                p = {
+                    'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+                }
+                mul_op = self.mlir.create_mul_op([op0, op1], output_shape, **p)
+                self.addOperand(onnx_node.name, mul_op)
+            else:
+                raise RuntimeError("not support now")
+
+    def convert_erf_op(self, onnx_node):
+        assert (onnx_node.op_type == "Erf")
+        op = self.getOperand(onnx_node.inputs[0])
+        output_shape = self.getShape(onnx_node.name)
+        p = {
+            'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+        }
+        erf_op = self.mlir.create_erf_op([op], output_shape, **p)
+        self.addOperand(onnx_node.name, erf_op)

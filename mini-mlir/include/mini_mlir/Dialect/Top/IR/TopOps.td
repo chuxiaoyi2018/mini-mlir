@@ -432,4 +432,56 @@ def Top_GatherOp: Top_Op<"Gather"> {
   //let hasCanonicalizer = 1;
 }
 
+def Top_ReduceMeanOp : Top_Op<"ReduceMean"> {
+  let summary = "ReduceMean operation";
+  let description = [{
+    Computes the mean of the input tensor's element along the provided axes.
+  }];
+  let arguments = (ins
+    AnyTensor:$input,
+    I32Attr:$axis
+  );
+  let results = (outs AnyTensor:$output);
+  //let hasCanonicalizer = 1;
+}
+
+def Top_MulOp: Top_Op<"Mul"> {
+  let summary = "Mul operator";
+
+  let description = [{
+    Elementwise multiplication of input1 and input2. input1 and input2 are tensors.
+  }];
+
+  let arguments = (ins
+    Variadic<AnyTensor>:$inputs,
+    DefaultValuedAttr<BoolAttr, "false">:$do_relu,
+    DefaultValuedAttr<F64Attr, "-1.0">:$relu_limit
+  );
+
+  let results = (outs AnyTensor:$output);
+  //let hasCanonicalizer = 1;
+}
+
+def Top_SqrtOp : Top_Op<"Sqrt"> {
+  let summary = "Sqrt operation";
+  let description = [{
+    Computes the square root of the input tensor's element.
+  }];
+  let arguments = (ins
+    AnyTensor:$input
+  );
+  let results = (outs AnyTensor:$output);
+}
+
+def Top_ErfOp : Top_Op<"Erf"> {
+  let summary = "Erf operation";
+  let description = [{
+    Computes the error function of the given input tensor element-wise.
+  }];
+  let arguments = (ins
+    AnyTensor:$input
+  );
+  let results = (outs AnyTensor:$output);
+}
+
 #endif // Top_OPS
