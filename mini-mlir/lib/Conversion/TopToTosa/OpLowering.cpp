@@ -11,7 +11,12 @@ void populateTopToTosaConversionPatterns(RewritePatternSet *patterns) {
 	      SoftmaxLowering,
         ReshapeLowering,
         PermuteLowering,
-        ConcatLowering
+        ConcatLowering,
+        ReduceMeanLowering,
+        SubLowering,
+        MulLowering,
+        DivLowering,
+        SqrtLowering
       // clang-format on
       >(patterns->getContext());
 }
@@ -262,6 +267,107 @@ void ConcatLowering::Lowering(PatternRewriter &rewriter,
     operands.push_back(in);
   }
   rewriter.replaceOpWithNewOp<mlir::tosa::ConcatOp>(op, outType, operands, attrs);
+}
+
+//===------------------------------------------------------------===//
+// ReduceMeanLowering
+//===------------------------------------------------------------===//
+void ReduceMeanLowering::Lowering(PatternRewriter &rewriter,
+                                  top::ReduceMeanOp op) const {
+  assert(op->getNumResults() == 1);
+  auto newType = change_dataformat(op->getResult(0).getType());
+  auto preType = op->getResult(0).getType();
+  auto size = preType.cast<RankedTensorType>().getShape().size();
+  int32_t new_axis, axis = op.getAxis();
+  
+
+  if (axis > 0) 
+    new_axis = axis;
+  else
+    new_axis = size + axis;
+
+  // ReduceSumOp
+  std::vector<NamedAttribute> attrs;
+  attrs.push_back(
+      rewriter.getNamedAttr("axis", rewriter.getI64IntegerAttr(new_axis)));
+  std::vector<int64_t> out_shape(newType.cast<RankedTensorType>().getShape());
+  out_shape[new_axis] = 1;
+  auto out_type = RankedTensorType::get(
+      out_shape, newType.cast<RankedTensorType>().getElementType());
+  auto reducesum = rewriter.create<mlir::tosa::ReduceSumOp>(
+      op->getLoc(), out_type, op->getOperands(), attrs);
+
+  // ConstOp
+  auto inType = op->getOperand(0).getType();
+  std::vector<int64_t> in_shape(inType.cast<RankedTensorType>().getShape());
+  std::vector<float> const_value;
+  const_value.push_back(1./in_shape[in_shape.size()-1]);
+  auto const_ty = RankedTensorType::get({1,1,1}, rewriter.getF32Type());
+  DenseElementsAttr attr = DenseElementsAttr::get(
+      const_ty, llvm::ArrayRef(const_value.data(), const_value.size()));
+  auto constop =
+      rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr);
+
+  // MulOp
+  rewriter.replaceOpWithNewOp<mlir::tosa::MulOp>(op, newType, 
+      reducesum->getResult(0), constop->getResult(0), rewriter.getI32IntegerAttr(0));
+}
+
+//===------------------------------------------------------------===//
+// SubLowering
+//===------------------------------------------------------------===//
+void SubLowering::Lowering(PatternRewriter &rewriter,
+                           top::SubOp op) const {
+  assert(op->getNumResults() == 1);
+  auto newType = change_dataformat(op->getResult(0).getType());
+  rewriter.replaceOpWithNewOp<mlir::tosa::SubOp>(op, newType, op->getOperand(0), op->getOperand(1));
+}
+
+//===------------------------------------------------------------===//
+// MulLowering
+//===------------------------------------------------------------===//
+void MulLowering::Lowering(PatternRewriter &rewriter,
+                           top::MulOp op) const {
+  assert(op->getNumResults() == 1);
+  auto newType = change_dataformat(op->getResult(0).getType());
+  rewriter.replaceOpWithNewOp<mlir::tosa::MulOp>(op, newType, 
+      op->getOperand(0), op->getOperand(1), rewriter.getI32IntegerAttr(0));
+}
+
+//===------------------------------------------------------------===//
+// DivLowering
+//===------------------------------------------------------------===//
+void DivLowering::Lowering(PatternRewriter &rewriter,
+                           top::DivOp op) const {
+  assert(op->getNumResults() == 1);
+  auto newType = change_dataformat(op->getResult(0).getType());
+
+  // ReciprocalOp
+  auto reciprocal_ty = op->getOperand(1).getType();
+  auto reciprocal = rewriter.create<mlir::tosa::ReciprocalOp>(
+      op->getLoc(), reciprocal_ty, op->getOperand(1));
+  // MulOp
+  auto mul = rewriter.create<mlir::tosa::MulOp>(
+      op->getLoc(), newType, op->getOperand(0), reciprocal->getResult(0),
+      rewriter.getI32IntegerAttr(0));
+  rewriter.replaceOp(op, mul->getResults());
+}
+
+//===------------------------------------------------------------===//
+// SqrtLowering
+//===------------------------------------------------------------===//
+void SqrtLowering::Lowering(PatternRewriter &rewriter,
+                            top::SqrtOp op) const {
+  assert(op->getNumResults() == 1);
+  auto newType = change_dataformat(op->getResult(0).getType());
+
+  // RsqrtOp
+  auto rsqrt = rewriter.create<mlir::tosa::RsqrtOp>(
+      op->getLoc(), newType, op->getOperand(0));
+  // ReciprocalOp
+  auto reciprocal = rewriter.create<mlir::tosa::ReciprocalOp>(
+      op->getLoc(), newType, rsqrt->getResult(0));
+  rewriter.replaceOp(op, reciprocal->getResults());
 }
 
 //===------------------------------------------------------------===//

@@ -360,7 +360,7 @@ class MLIRImporter(object):
         param = {
             'name': StringAttr.get(kargs['name'])
         }
-        return self.buildOp(Top.ReduceMeanOp, operands, [output_type], **param)
+        return self.buildOp(Top.SqrtOp, operands, [output_type], **param)
     
     def create_erf_op(self, operands, output_shape, **kargs):
         output_type = self.get_tensor_type(output_shape)

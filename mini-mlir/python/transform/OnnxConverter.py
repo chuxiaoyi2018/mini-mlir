@@ -100,7 +100,7 @@ class OnnxConverter(BaseConverter):
             "Add": lambda node: self.convert_add_op(node),
             "Sub": lambda node: self.convert_sub_op(node),
             "Div": lambda node: self.convert_div_op(node),
-            "AveragePool": lambda node: self.convert_reduce_mean_op(node),
+            "AveragePool": lambda node: self.convert_avgpool_op(node),
             "BatchNormalization": lambda node: self.convert_batchnorm_op(node),
             "Conv": lambda node: self.convert_conv_op(node),
             "Concat": lambda node: self.convert_concat_op(node),
@@ -779,7 +779,7 @@ class OnnxConverter(BaseConverter):
         p = {
             'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
         }
-        sqrt_op = self.mlir.create_mul_op([operand], output_shape, **p)
+        sqrt_op = self.mlir.create_sqrt_op([operand], output_shape, **p)
         self.addOperand(onnx_node.name, sqrt_op)
 
     def convert_mul_op(self, onnx_node):

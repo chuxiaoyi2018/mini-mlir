@@ -19,5 +19,10 @@ OpLowering(Conv)
 OpLowering(Reshape)
 OpLowering(Permute)
 OpLowering(Concat)
+OpLowering(ReduceMean)
+OpLowering(Sub)
+OpLowering(Mul)
+OpLowering(Div)
+OpLowering(Sqrt)
 // clang-format on
 } // namespace mini_mlir
