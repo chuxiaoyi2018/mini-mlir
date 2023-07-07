@@ -25,7 +25,7 @@ class vit_lite(torch.nn.Module):
         x = self.model.vit.embeddings(x)
         x = self.model.vit.encoder.layer[0](x)
         x = self.model.vit.layernorm(x[0])
-        x = self.model.classifier(x[:,0])
+        x = self.model.classifier(x[:,0:1])
         return x
             
 lite_model = vit_lite(model)

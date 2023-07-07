@@ -40,11 +40,12 @@ class ModelTransformTool(object):
         pass
 
 class OnnxModelTransformTool(ModelTransformTool):
-    def __init__(self, model_name, onnx_model, input_shapes:list=[]):
+    def __init__(self, model_name, onnx_model, chip, input_shapes:list=[]):
         super().__init__(model_name)
         self.onnx_model = onnx_model
         self.input_shapes = input_shapes
-
+        self.chip = chip
+        
     def _fill_inputs(self, ort_session, inputs):
         inodes = ort_session.get_inputs()
         data = {}
@@ -63,7 +64,7 @@ class OnnxModelTransformTool(ModelTransformTool):
         raise RuntimeError("not support now")
 
     def _transform_(self, mlir_file):
-        cvt = OnnxConverter(self.model_name, self.onnx_model, self.input_shapes, mlir_file)
+        cvt = OnnxConverter(self.model_name, self.onnx_model, self.input_shapes, mlir_file, self.chip)
         cvt.run()
 
 def str2shape(v):
@@ -93,10 +94,11 @@ if __name__ == '__main__':
                         help="minimum similarity tolerance to model transform")
     parser.add_argument("--excepts", default='-', help="excepts")
     parser.add_argument("--mlir", required=True, help="output mlir model file")
+    parser.add_argument("--chip", required=True, help="need to reorder weight by chip")
     args = parser.parse_args()
     tool = None
     if args.model_type == 'onnx':
-        tool = OnnxModelTransformTool(args.model_name, args.model_def, args.input_shapes)
+        tool = OnnxModelTransformTool(args.model_name, args.model_def, args.chip, args.input_shapes)
     else:
         # TODO: support more AI model types
         raise RuntimeError("unsupport model type:{}".format(args.model_type))

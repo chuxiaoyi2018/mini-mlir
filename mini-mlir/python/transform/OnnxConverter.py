@@ -82,7 +82,7 @@ class OnnxNode(BaseNode):
 
 
 class OnnxConverter(BaseConverter):
-    def __init__(self, model_name: str, onnx_file: str, input_shapes: list, mlir_file: str):
+    def __init__(self, model_name: str, onnx_file: str, input_shapes: list, mlir_file: str, chip: str):
         super().__init__()
         self.model_name = model_name
         self.weight_file = "{}_top_weight.npz".format(model_name)
@@ -91,6 +91,7 @@ class OnnxConverter(BaseConverter):
         self.output_names = list()
         self.model = None
         self.mlir = None
+        self.chip = chip
         
         self.load_onnx_model(onnx_file, input_shapes)
         self.init_MLIRImporter()
@@ -117,6 +118,7 @@ class OnnxConverter(BaseConverter):
             "ReduceMean": lambda node: self.convert_reduce_mean_op(node),
             "Relu": lambda node: self.convert_relu_op(node),
             "Reshape": lambda node: self.convert_reshape_op(node),
+            "Slice": lambda node: self.convert_slice_op(node),
             "Sqrt": lambda node: self.convert_sqrt_op(node),
             "Split": lambda node: self.convert_split_op(node),
             "Softmax": lambda node: self.convert_softmax_op(node),
@@ -294,6 +296,13 @@ class OnnxConverter(BaseConverter):
             self.convert_add_op(onnx_node)
             return
 
+
+        if self.chip == "cpu":
+            if len(lhs_shape) == 3 and len(rhs_shape) == 1:
+                weight = self.tensors[rhs]
+                self.tensors[rhs] = weight.reshape(1, 1, rhs_shape[0])
+                self.shapes[rhs] = self.tensors[rhs].shape
+
         
         if not self.isWeight(onnx_node.inputs[0]) and not self.isWeight(onnx_node.inputs[1]):
             op0 = self.getOperand(onnx_node.inputs[0])
@@ -409,8 +418,19 @@ class OnnxConverter(BaseConverter):
         operands = list()
         A = onnx_node.inputs[0]
         B = onnx_node.inputs[1]
+        A_shape = self.getShape(A)
+        B_shape = self.getShape(B)
+
         in_op = self.getOperand(A)
         operands.append(in_op)
+
+        # reorder for tosa
+        if self.chip == "cpu":
+            if alpha == 1 and beta == 1 and trans_a == 0 and trans_b == 0 and len(A_shape) == 3 and len(B_shape) == 2:
+                assert A_shape[-1] == B_shape[0]
+                weight = self.tensors[B]
+                self.tensors[B] = weight.reshape(1, B_shape[0], B_shape[1])
+                self.shapes[B] = self.tensors[B].shape
 
         if self.isWeight(B):
             if trans_b == 1 or alpha != 1:
@@ -690,6 +710,37 @@ class OnnxConverter(BaseConverter):
         }
         new_op = self.mlir.create_gelu_op([operand], output_shape, **p) 
         self.addOperand(onnx_node.name, new_op)
+
+    def convert_slice_op(self, onnx_node):
+        assert (onnx_node.op_type == "Slice")
+        in0 = self.getOperand(onnx_node.inputs[0])
+        in0_shape = self.getShape(onnx_node.inputs[0])
+        out_shape = self.getShape(onnx_node.name)
+        axis = onnx_node.attrs.get('axis', 0)
+
+        if self.isScalar(onnx_node.inputs[1]):
+            offset = int(self.getScalar(onnx_node.inputs[1]))
+            if offset < 0:
+                offset = in0_shape[axis] + offset
+            slice_offset = [0] * len(in0_shape)
+            slice_step = [1] * len(in0_shape)
+            slice_end = [in0_shape[i] for i in range(len(in0_shape))]
+            slice_offset[axis] = offset
+            slice_end[axis] = offset + 1
+            slice_shape = list(np.take(np.ones(in0_shape), np.array([offset]), axis=axis).shape)
+
+            # add slice
+            p = {
+                'name': "{}_Slice_{}".format(onnx_node.name, onnx_node.op_type),
+                'offset': list(slice_offset),
+                'steps': list(slice_step),
+                'ends': list(slice_end),
+            }
+            slice_op = self.mlir.create_slice_op([in0]+[self.mlir.none_op]*3, slice_shape, **p)
+            self.addOperand(onnx_node.name, slice_op)
+            return
+        else:
+            raise RuntimeError("not support now")
 
     def convert_gather_op(self, onnx_node):
         assert (onnx_node.op_type == "Gather")

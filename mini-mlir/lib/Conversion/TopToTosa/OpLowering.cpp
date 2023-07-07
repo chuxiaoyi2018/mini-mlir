@@ -16,7 +16,8 @@ void populateTopToTosaConversionPatterns(RewritePatternSet *patterns) {
         SubLowering,
         MulLowering,
         DivLowering,
-        SqrtLowering
+        SqrtLowering,
+        MatMulLowering
       // clang-format on
       >(patterns->getContext());
 }
@@ -368,6 +369,60 @@ void SqrtLowering::Lowering(PatternRewriter &rewriter,
   auto reciprocal = rewriter.create<mlir::tosa::ReciprocalOp>(
       op->getLoc(), newType, rsqrt->getResult(0));
   rewriter.replaceOp(op, reciprocal->getResults());
+}
+
+//===------------------------------------------------------------===//
+// MatMulLowering
+//===------------------------------------------------------------===//
+void MatMulLowering::Lowering(PatternRewriter &rewriter,
+                              top::MatMulOp op) const {
+  assert(op->getNumResults() == 1);
+  auto newType = change_dataformat(op->getResult(0).getType());
+  auto leftType = op->getOperand(0).getType();
+  auto rightType = op->getOperand(1).getType();
+  std::vector<int64_t> leftShape(leftType.cast<RankedTensorType>().getShape());
+  std::vector<int64_t> rightShape(rightType.cast<RankedTensorType>().getShape());
+  auto leftSize = leftType.cast<RankedTensorType>().getShape().size();
+  auto rightSize = rightType.cast<RankedTensorType>().getShape().size();
+
+  if (leftSize == 3 && rightSize == 3) {
+    // MatMulOp
+    auto matmul = rewriter.create<mlir::tosa::MatMulOp>(
+        op->getLoc(), newType, op->getOperand(0), op->getOperand(1));
+    rewriter.replaceOp(op, matmul->getResults());
+  } else if (leftSize == 4 && rightSize == 4 && leftShape[0] == 1 and rightShape[0] == 1) {
+    // ReshapeOp
+    std::vector<int64_t> newLeftShape(leftShape.begin() + 1, leftShape.end());
+    std::vector<int64_t> newRightShape(rightShape.begin() + 1, rightShape.end());
+
+    auto left_type = RankedTensorType::get(
+      newLeftShape, newType.cast<RankedTensorType>().getElementType());
+
+    auto right_type = RankedTensorType::get(
+      newRightShape, newType.cast<RankedTensorType>().getElementType());
+
+    auto left_op = rewriter.create<mlir::tosa::ReshapeOp>(
+        op->getLoc(), left_type, op->getOperand(0), newLeftShape);
+    auto right_op = rewriter.create<mlir::tosa::ReshapeOp>(
+        op->getLoc(), right_type, op->getOperand(1), newRightShape);
+
+    // MatMulOp
+    std::vector<int64_t> matmulShape = {newLeftShape[0], newLeftShape[1], newRightShape[2]};
+    auto matmul_type = RankedTensorType::get(
+      matmulShape, newType.cast<RankedTensorType>().getElementType());
+    auto matmul_op = rewriter.create<mlir::tosa::MatMulOp>(
+        op->getLoc(), matmul_type, left_op->getResult(0), right_op->getResult(0));
+
+    // ReshapeOp
+    std::vector<int64_t> finalShape = {1, newLeftShape[0], newLeftShape[1], newRightShape[2]};
+    auto reshape_type = RankedTensorType::get(
+      finalShape, newType.cast<RankedTensorType>().getElementType());
+    auto reshape_op = rewriter.create<mlir::tosa::ReshapeOp>(
+        op->getLoc(), reshape_type, matmul_op->getResult(0), finalShape);
+    rewriter.replaceOp(op, reshape_op->getResults());
+  }
+
+
 }
 
 //===------------------------------------------------------------===//
