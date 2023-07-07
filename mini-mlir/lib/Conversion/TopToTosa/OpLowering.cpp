@@ -17,7 +17,8 @@ void populateTopToTosaConversionPatterns(RewritePatternSet *patterns) {
         MulLowering,
         DivLowering,
         SqrtLowering,
-        MatMulLowering
+        MatMulLowering,
+        MulConstLowering
       // clang-format on
       >(patterns->getContext());
 }
@@ -421,8 +422,28 @@ void MatMulLowering::Lowering(PatternRewriter &rewriter,
         op->getLoc(), reshape_type, matmul_op->getResult(0), finalShape);
     rewriter.replaceOp(op, reshape_op->getResults());
   }
+}
 
+//===------------------------------------------------------------===//
+// MulConstLowering
+//===------------------------------------------------------------===//
+void MulConstLowering::Lowering(PatternRewriter &rewriter,
+                                top::MulConstOp op) const {
+  assert(op->getNumResults() == 1);
 
+  // ConstOp
+  auto inType = op->getOperand(0).getType();
+  std::vector<float> const_value;
+  const_value.push_back(op->getAttr("const_val").dyn_cast_or_null<FloatAttr>().getValueAsDouble());
+  auto const_ty = RankedTensorType::get({1,1,1,1}, rewriter.getF32Type());
+  DenseElementsAttr attr = DenseElementsAttr::get(
+      const_ty, llvm::ArrayRef(const_value.data(), const_value.size()));
+  auto constop =
+      rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr);
+
+  // MulOp
+  rewriter.replaceOpWithNewOp<mlir::tosa::MulOp>(op, inType, 
+      op->getOperand(0), constop->getResult(0), rewriter.getI32IntegerAttr(0));
 }
 
 //===------------------------------------------------------------===//
