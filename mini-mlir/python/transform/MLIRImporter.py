@@ -335,8 +335,9 @@ class MLIRImporter(object):
         param = {
             'name': StringAttr.get(kargs['name']),
             'offset': self.ArrayAttr(kargs['offset']),
-            'steps': self.ArrayAttr(kargs['steps']),
-            'ends': self.ArrayAttr(kargs['ends']),
+            'axis': IntegerAttr.get(self.mlir_type['INT32'], kargs['axis']),
+            'start_list': self.ArrayAttr(kargs['start_list']),
+            'size_list': self.ArrayAttr(kargs['size_list']),
         }
         return self.buildOp(Top.SliceOp, operands, [output_type], **param)
     

@@ -26,5 +26,7 @@ OpLowering(Div)
 OpLowering(Sqrt)
 OpLowering(MatMul)
 OpLowering(MulConst)
+OpLowering(GELU)
+OpLowering(Slice)
 // clang-format on
 } // namespace mini_mlir

@@ -659,7 +659,7 @@ def onnx_opt(model, dump=False, rigorous=True):
     remove_tensor_from_input(model)
     # add your patterns here if you expect that your patterns actually works
     pattern_functions = [
-        TorchLayerNormPattern,
+        # TorchLayerNormPattern,
         TorchGELUPattern
     ]
 

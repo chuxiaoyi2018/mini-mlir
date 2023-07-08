@@ -18,7 +18,9 @@ void populateTopToTosaConversionPatterns(RewritePatternSet *patterns) {
         DivLowering,
         SqrtLowering,
         MatMulLowering,
-        MulConstLowering
+        MulConstLowering,
+        GELULowering,
+        SliceLowering
       // clang-format on
       >(patterns->getContext());
 }
@@ -433,9 +435,15 @@ void MulConstLowering::Lowering(PatternRewriter &rewriter,
 
   // ConstOp
   auto inType = op->getOperand(0).getType();
+  auto size = inType.cast<RankedTensorType>().getShape().size();
   std::vector<float> const_value;
   const_value.push_back(op->getAttr("const_val").dyn_cast_or_null<FloatAttr>().getValueAsDouble());
-  auto const_ty = RankedTensorType::get({1,1,1,1}, rewriter.getF32Type());
+
+  std::vector<int64_t> const_shape;
+  for (int i = 0; i < size ; i++) {
+    const_shape.push_back(1);
+  }
+  auto const_ty = RankedTensorType::get(const_shape, rewriter.getF32Type());
   DenseElementsAttr attr = DenseElementsAttr::get(
       const_ty, llvm::ArrayRef(const_value.data(), const_value.size()));
   auto constop =
@@ -447,13 +455,143 @@ void MulConstLowering::Lowering(PatternRewriter &rewriter,
 }
 
 //===------------------------------------------------------------===//
+// GELULowering
+//===------------------------------------------------------------===//
+void GELULowering::Lowering(PatternRewriter &rewriter,
+                            top::GELUOp op) const {
+  assert(op->getNumResults() == 1);
+
+  // ConstOp 
+  auto inType = op->getOperand(0).getType();
+  auto size = inType.cast<RankedTensorType>().getShape().size();
+  std::vector<int64_t> const_shape;
+  for (int i = 0; i < size ; i++) {
+    const_shape.push_back(1);
+  }
+  auto const_ty = RankedTensorType::get(const_shape, rewriter.getF32Type());
+
+  // ConstOp const_value_0 = 0.5
+  std::vector<float> const_value_0 = {0.5};
+  DenseElementsAttr attr0 = DenseElementsAttr::get(
+      const_ty, llvm::ArrayRef(const_value_0.data(), const_value_0.size()));
+  auto constop_0 =
+      rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr0);
+
+  // ConstOp const_value_1 = 1
+  std::vector<float> const_value_1 = {1};
+  DenseElementsAttr attr1 = DenseElementsAttr::get(
+      const_ty, llvm::ArrayRef(const_value_1.data(), const_value_1.size()));
+  auto constop_1 =
+      rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr1);
+
+  // ConstOp const_value_2 = 2
+  std::vector<float> const_value_2 = {0.7978845608028654};
+  DenseElementsAttr attr2 = DenseElementsAttr::get(
+      const_ty, llvm::ArrayRef(const_value_2.data(), const_value_2.size()));
+  auto constop_2 =
+      rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr2);
+
+
+  // ConstOp const_value_3 = 3
+  std::vector<float> const_value_3 = {0.044715};
+  DenseElementsAttr attr3 = DenseElementsAttr::get(
+      const_ty, llvm::ArrayRef(const_value_3.data(), const_value_3.size()));
+  auto constop_3 =
+      rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr3);
+
+  // ConstOp for PowOp
+  std::vector<float> const_value_pow = {3};
+  DenseElementsAttr attr_pow = DenseElementsAttr::get(
+      const_ty, llvm::ArrayRef(const_value_pow.data(), const_value_pow.size()));
+  auto constop_pow =
+      rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr_pow);
+
+  // PowOp
+  auto pow_op = rewriter.create<mlir::tosa::PowOp>(
+      op->getLoc(), inType, op->getOperand(0), constop_pow->getResult(0));
+
+  // MulOp
+  auto mul_pow_const3_op = rewriter.create<mlir::tosa::MulOp>(
+      op->getLoc(), inType, pow_op->getResult(0), constop_3->getResult(0),
+      rewriter.getI32IntegerAttr(0));
+
+  // AddOp
+  auto add_op_mul_op = rewriter.create<mlir::tosa::AddOp>(
+      op->getLoc(), inType, op->getOperand(0), mul_pow_const3_op->getResult(0));
+
+  // MulOp
+  auto mul_add_const2_op = rewriter.create<mlir::tosa::MulOp>(
+      op->getLoc(), inType, add_op_mul_op->getResult(0), constop_2->getResult(0),
+      rewriter.getI32IntegerAttr(0));
+
+  // TanhOp
+  auto tanh_op = rewriter.create<mlir::tosa::TanhOp>(op->getLoc(), inType, mul_add_const2_op->getResult(0));
+
+  // AddOp
+  auto add_tanh_const1_op = rewriter.create<mlir::tosa::AddOp>(
+      op->getLoc(), inType, tanh_op->getResult(0), constop_1->getResult(0));
+
+  // MulOp
+  auto mul_op_tanh_op = rewriter.create<mlir::tosa::MulOp>(
+      op->getLoc(), inType, op->getOperand(0), add_tanh_const1_op->getResult(0),
+      rewriter.getI32IntegerAttr(0));
+
+  // MulOp
+  auto mul_const0_op = rewriter.create<mlir::tosa::MulOp>(
+      op->getLoc(), inType, constop_0->getResult(0), mul_op_tanh_op->getResult(0),
+      rewriter.getI32IntegerAttr(0));
+
+  rewriter.replaceOp(op, mul_const0_op->getResults());
+}
+
+//===------------------------------------------------------------===//
+// SliceLowering
+//===------------------------------------------------------------===//
+void SliceLowering::Lowering(PatternRewriter &rewriter,
+                             top::SliceOp op) const {
+  assert(op->getNumResults() == 1);
+  auto inType = op->getOperand(0).getType();
+
+  // start_list
+  auto startListAttr = op->getAttr("start_list").dyn_cast_or_null<ArrayAttr>();
+  std::vector<int64_t> starts;
+  if (startListAttr) {
+    for (auto startAttr : startListAttr.getValue()) {
+      starts.push_back(startAttr.cast<IntegerAttr>().getInt()); 
+    }
+  }
+
+  // size_list
+  auto sizeListAttr = op->getAttr("size_list").dyn_cast_or_null<ArrayAttr>();
+  std::vector<int64_t> sizes;
+  if (sizeListAttr) {
+    for (auto sizeAttr : sizeListAttr.getValue()) {
+      sizes.push_back(sizeAttr.cast<IntegerAttr>().getInt()); 
+    }
+  }
+  
+  // SliceOp
+  std::vector<int64_t> outShape = {sizes.begin(), sizes.end()};
+  auto outType = RankedTensorType::get(
+      outShape, inType.cast<RankedTensorType>().getElementType());
+
+  std::vector<NamedAttribute> attrs;
+  attrs.push_back(
+      rewriter.getNamedAttr("start", rewriter.getDenseI64ArrayAttr(starts)));
+  attrs.push_back(
+      rewriter.getNamedAttr("size", rewriter.getDenseI64ArrayAttr(sizes)));
+  rewriter.replaceOpWithNewOp<mlir::tosa::SliceOp>(op, outType, op->getOperand(0), attrs);
+}
+
+//===------------------------------------------------------------===//
 // SoftmaxLowering
 //===------------------------------------------------------------===//
 void SoftmaxLowering::Lowering(PatternRewriter &rewriter,
                                top::SoftmaxOp op) const {
   assert(op->getNumResults() == 1);
   auto preType = op->getResult(0).getType();
-  auto newType = change_dataformat(preType);
+  // auto newType = change_dataformat(preType);
+  auto newType = op->getOperand(0).getType();
   auto size = preType.cast<RankedTensorType>().getShape().size();
   int32_t new_axis, axis = op.getAxis();
   if (size == 4) {

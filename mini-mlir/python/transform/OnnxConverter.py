@@ -195,8 +195,8 @@ class OnnxConverter(BaseConverter):
         print("beginn onnxopt")
         if is_ok:
             # fuse ops such as layernorm gelu...
-            # self.model, self.node_name_mapping = onnx_opt(self.model, True)
-            pass
+            self.model, self.node_name_mapping = onnx_opt(self.model, True)
+            # pass
         print("end onnxopt")
         # add all weight
         for tensor in self.model.graph.initializer:
@@ -713,32 +713,39 @@ class OnnxConverter(BaseConverter):
 
     def convert_slice_op(self, onnx_node):
         assert (onnx_node.op_type == "Slice")
-        in0 = self.getOperand(onnx_node.inputs[0])
-        in0_shape = self.getShape(onnx_node.inputs[0])
-        out_shape = self.getShape(onnx_node.name)
-        axis = onnx_node.attrs.get('axis', 0)
+        if len(onnx_node.inputs) == 5:
+            input_name, start_name, end_name, axes_name, step_name = onnx_node.inputs
+            in0 = self.getOperand(onnx_node.inputs[0])
+            in0_shape = self.getShape(onnx_node.inputs[0])
+            out_shape = self.getShape(onnx_node.name)
+            
+            if self.isScalar(onnx_node.inputs[1]) and self.isScalar(onnx_node.inputs[2]) and self.isScalar(onnx_node.inputs[4]):
+                axis = int(self.tensors[axes_name].flatten()[0])
+                start = int(self.getScalar(onnx_node.inputs[1]))
+                end = int(self.getScalar(onnx_node.inputs[2]))
+                step = int(self.getScalar(onnx_node.inputs[4]))
+                offset = list(range(start, end, step))
+                slice_shape = list(np.take(np.ones(in0_shape), offset, axis=axis).shape)
 
-        if self.isScalar(onnx_node.inputs[1]):
-            offset = int(self.getScalar(onnx_node.inputs[1]))
-            if offset < 0:
-                offset = in0_shape[axis] + offset
-            slice_offset = [0] * len(in0_shape)
-            slice_step = [1] * len(in0_shape)
-            slice_end = [in0_shape[i] for i in range(len(in0_shape))]
-            slice_offset[axis] = offset
-            slice_end[axis] = offset + 1
-            slice_shape = list(np.take(np.ones(in0_shape), np.array([offset]), axis=axis).shape)
-
-            # add slice
-            p = {
-                'name': "{}_Slice_{}".format(onnx_node.name, onnx_node.op_type),
-                'offset': list(slice_offset),
-                'steps': list(slice_step),
-                'ends': list(slice_end),
-            }
-            slice_op = self.mlir.create_slice_op([in0]+[self.mlir.none_op]*3, slice_shape, **p)
-            self.addOperand(onnx_node.name, slice_op)
-            return
+                # start_list and size_list for tosa
+                if self.chip == 'cpu':
+                    size = len(in0_shape)
+                    start_list =  [int(self.getScalar(onnx_node.inputs[1]))] * size
+                    size_list = slice_shape
+                    
+                # add slice
+                p = {
+                    'name': "{}_Slice_{}".format(onnx_node.name, onnx_node.op_type),
+                    'axis': axis,
+                    'offset': offset,
+                    'start_list': start_list,
+                    'size_list': size_list
+                }
+                slice_op = self.mlir.create_slice_op([in0], slice_shape, **p)
+                self.addOperand(onnx_node.name, slice_op)
+                return
+            else:
+                raise RuntimeError("not support now")
         else:
             raise RuntimeError("not support now")
 
