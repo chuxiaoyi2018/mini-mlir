@@ -14,7 +14,7 @@ typedef struct MemrefDescriptor {
 
 // C interface of model
 // input: arg1  output: arg0
-void _mlir_ciface_model(Memref* arg0, Memref* arg1){};
+void _mlir_ciface_entry(Memref* arg0, Memref* arg1);
 
 int main(int argc, char** argv){
     
