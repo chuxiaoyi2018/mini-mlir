@@ -210,7 +210,7 @@ void ConvLowering::Lowering(PatternRewriter &rewriter, top::ConvOp op) const {
 void ReshapeLowering::Lowering(PatternRewriter &rewriter,
                                top::ReshapeOp op) const {
   assert(op->getNumResults() == 1);
-  auto newType = change_dataformat(op->getResult(0).getType());
+  auto newType = op->getResult(0).getType();
   auto newShape = newType.cast<RankedTensorType>().getShape();
   //auto attr = rewriter.getNamedAttr("new_shape", rewriter.getDenseI64ArrayAttr(newShape));
   rewriter.replaceOpWithNewOp<mlir::tosa::ReshapeOp>(op, newType, op->getOperand(0), newShape);
@@ -222,7 +222,8 @@ void ReshapeLowering::Lowering(PatternRewriter &rewriter,
 void PermuteLowering::Lowering(PatternRewriter &rewriter,
                                top::PermuteOp op) const {
   assert(op->getNumResults() == 1);
-  auto outType = change_dataformat(op->getResult(0).getType());
+  auto outType = op->getResult(0).getType();
+  auto outShape = outType.cast<RankedTensorType>().getShape();
 
   std::vector<Value> operands;
   operands.push_back(op->getOperand(0));
@@ -252,9 +253,8 @@ void PermuteLowering::Lowering(PatternRewriter &rewriter,
 void ConcatLowering::Lowering(PatternRewriter &rewriter,
                               top::ConcatOp op) const {
   assert(op->getNumResults() == 1);
-  auto outType = change_dataformat(op->getResult(0).getType());
-  auto preType = op->getResult(0).getType();
-  auto size = preType.cast<RankedTensorType>().getShape().size();
+  auto outType = op->getResult(0).getType();
+  auto size = outType.cast<RankedTensorType>().getShape().size();
   int32_t new_axis, axis = op.getAxis();
 
   if (axis > 0) 

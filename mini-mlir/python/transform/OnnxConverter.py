@@ -857,10 +857,11 @@ class OnnxConverter(BaseConverter):
 
         if (not self.isWeight(lhs)) and self.isWeight(rhs):
             # weight reorder for tosa
-            if len(lhs_shape) == 3 and (len(rhs_shape) == 1 or len(rhs_shape) == 0):
+            if len(lhs_shape) == 3 and (len(rhs_shape) == 1 or len(rhs_shape) == 0) and self.chip == "cpu":
                 weight = self.getWeight(rhs)
                 weight = weight.reshape(1,1,-1)
                 self.tensors[rhs] = weight
+                self.shapes[rhs] = weight.shape
                 weight_op = self.getWeightOp(rhs)
                 p = {
                     'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
