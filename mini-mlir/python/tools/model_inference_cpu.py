@@ -20,6 +20,7 @@ if __name__ == '__main__':
                         help="CPU object file , .o")
     # TODO: Requiring users to specify this argument is quite unreasonable
     #parser.add_argument("--output_size", required=True, help="size of the output tensor")
+    parser.add_argument("--input_shape", required=True, help="shape of the input tensor")
     parser.add_argument("--output_shape", required=True, help="shape of the output tensor")
     args = parser.parse_args()
 

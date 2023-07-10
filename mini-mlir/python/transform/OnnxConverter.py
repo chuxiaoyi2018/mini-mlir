@@ -168,7 +168,12 @@ class OnnxConverter(BaseConverter):
 
     def get_input_shapes(self, model: onnx.ModelProto):
         inputs = self.get_inputs(model)
-        return [self.get_shape_from_value_info_proto(i) for i in inputs]
+        inputs_list = [self.get_shape_from_value_info_proto(i) for i in inputs]
+
+        # transpose from [1,3,224,224] to [1,224,224,3]
+        # if self.chip == "cpu" and len(inputs_list) == 1 and len(inputs_list[0]) == 4:
+        #     inputs_list = [[i[0], i[2], i[3], i[1]] for i in inputs_list]
+        return inputs_list
 
     def input_shape_assign(self, input_shapes):
         inputs = self.get_inputs(self.model)
@@ -177,6 +182,10 @@ class OnnxConverter(BaseConverter):
         no_shape = True
 
     def load_onnx_model(self, onnx_file, input_shapes: list):
+        # transpose from 
+        # if self.chip == "cpu" and len(input_shapes) == 1 and len(input_shapes[0]) == 4:
+        #     input_shapes = [[shape[0], shape[2], shape[3], shape[1]] for shape in input_shapes]
+
         self.model = onnx.load(onnx_file)
         self.input_names = self.get_input_names(self.model)
         self.num_input = len(self.input_names)
@@ -209,6 +218,9 @@ class OnnxConverter(BaseConverter):
         for input in self.model.graph.input:
             if not self.isTensor(input.name):
                 shape = [i.dim_value for i in input.type.tensor_type.shape.dim]
+                # transpose from [1,3,224,224] to [1,224,224,3]
+                # if self.chip == "cpu" and len(shape) == 4:
+                #     shape = [shape[0], shape[2], shape[3], shape[1]]
                 self.addShape(input.name, shape)
         for info in self.model.graph.value_info:
             shape = [i.dim_value for i in info.type.tensor_type.shape.dim]
@@ -217,6 +229,9 @@ class OnnxConverter(BaseConverter):
             if not self.isTensor(output.name):
                 self.output_names.append(output.name)
                 shape = [i.dim_value for i in output.type.tensor_type.shape.dim]
+                # transpose from [1,3,224,224] to [1,224,224,3]
+                # if self.chip == "cpu" and len(shape) == 4:
+                #     shape = [shape[0], shape[2], shape[3], shape[1]]
                 self.addShape(output.name, shape)
         onnx.save(self.model, "{}_debug.onnx".format(self.model_name))
 
@@ -366,35 +381,43 @@ class OnnxConverter(BaseConverter):
 
     def convert_conv_op(self, onnx_node):
         assert (onnx_node.op_type == "Conv")
-        op = self.getOperand(onnx_node.inputs[0])
-        kernel_shape = onnx_node.attrs['kernel_shape']
-        dim = len(kernel_shape)
-        dilations = onnx_node.attrs.get("dilations", dim * [1])
-        group = onnx_node.attrs.get("group", 1)
-        pads = onnx_node.attrs.get("pads", dim * 2 * [0])
-        strides = onnx_node.attrs.get("strides", dim * [1])
-        operands = list()
-        operands.append(op)
-        filter_op = self.getWeightOp(onnx_node.inputs[1])
-        operands.append(filter_op)
-        if len(onnx_node.inputs) > 2:
-            bias_op = self.getWeightOp(onnx_node.inputs[2])
+        if self.chip == "cpu" and len(onnx_node.inputs) == 3:
+            # transpose from (OC,IC,KH,KW) to (OC,KH,KW,IC)
+            # self.tensors[onnx_node.inputs[1]] = self.tensors[onnx_node.inputs[1]].transpose(0,2,3,1)
+            # self.shapes[onnx_node.inputs[1]] = self.tensors[onnx_node.inputs[1]].shape
+            # output_shape = self.shapes[onnx_node.outputs[0]]
+            # self.shapes[onnx_node.outputs[0]] = [output_shape[0], output_shape[2], output_shape[3], output_shape[1]]
+            op = self.getOperand(onnx_node.inputs[0])
+            kernel_shape = onnx_node.attrs['kernel_shape']
+            dim = len(kernel_shape)
+            dilations = onnx_node.attrs.get("dilations", dim * [1])
+            group = onnx_node.attrs.get("group", 1)
+            pads = onnx_node.attrs.get("pads", dim * 2 * [0])
+            strides = onnx_node.attrs.get("strides", dim * [1])
+            operands = list()
+            operands.append(op)
+            filter_op = self.getWeightOp(onnx_node.inputs[1])
+            operands.append(filter_op)
+            if len(onnx_node.inputs) > 2:
+                bias_op = self.getWeightOp(onnx_node.inputs[2])
+            else:
+                bias_op = self.mlir.none_op
+            operands.append(bias_op)
+            p = {
+                'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+                'kernel_shape': kernel_shape,
+                'strides': strides,
+                'dilations': dilations,
+                'pads': pads,
+                'group': group,
+                'do_relu': False,
+                'ins': [],
+            }
+            output_shape = self.getShape(onnx_node.name)
+            new_op = self.mlir.create_conv_op(operands, output_shape, **p)
+            self.addOperand(onnx_node.name, new_op)
         else:
-            bias_op = self.mlir.none_op
-        operands.append(bias_op)
-        p = {
-            'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
-            'kernel_shape': kernel_shape,
-            'strides': strides,
-            'dilations': dilations,
-            'pads': pads,
-            'group': group,
-            'do_relu': False,
-            'ins': [],
-        }
-        output_shape = self.getShape(onnx_node.name)
-        new_op = self.mlir.create_conv_op(operands, output_shape, **p)
-        self.addOperand(onnx_node.name, new_op)
+            raise RuntimeError("not support now")
 
     def convert_flatten_op(self, onnx_node):
         assert (onnx_node.op_type == "Flatten")

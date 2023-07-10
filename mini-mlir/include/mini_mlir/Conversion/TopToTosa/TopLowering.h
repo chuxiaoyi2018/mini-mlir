@@ -43,7 +43,7 @@ static Type change_dataformat(Type ty_){
   return RankedTensorType::get(newShape, ty.getElementType());
 }
 
-
+// reorder weight for tosa  [N,C,H,W] -> [N,H,W,C]
 static float* change_weight(std::shared_ptr<std::vector<float>> valptr, 
                                     Type ty_) {
   auto ty = ty_.cast<RankedTensorType>();
