@@ -628,8 +628,7 @@ class OnnxConverter(BaseConverter):
         op = self.getOperand(onnx_node.inputs[0])
         output_shape = self.getShape(onnx_node.name)
         p = {
-            'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
-            'new_shape': output_shape
+            'name': "{}_{}".format(onnx_node.name, onnx_node.op_type)
         }
         new_op = self.mlir.create_reshape_op([op], output_shape, **p)
         self.addOperand(onnx_node.name, new_op)
@@ -836,24 +835,33 @@ class OnnxConverter(BaseConverter):
         axis = onnx_node.attrs.get('axis', 0)
 
         if self.isScalar(onnx_node.inputs[1]):
-            offset = int(self.getScalar(onnx_node.inputs[1]))
-            if offset < 0:
-                offset = in0_shape[axis] + offset
-            slice_offset = [0] * len(in0_shape)
-            slice_step = [1] * len(in0_shape)
-            slice_end = [in0_shape[i] for i in range(len(in0_shape))]
-            slice_offset[axis] = offset
-            slice_end[axis] = offset + 1
-            slice_shape = list(np.take(np.ones(in0_shape), np.array([offset]), axis=axis).shape)
+            start = int(self.getScalar(onnx_node.inputs[1]))
+            if len(onnx_node.inputs) >= 3:
+                end = int(self.getScalar(onnx_node.inputs[2]))
+            else:
+                end = start + 1
+            if len(onnx_node.inputs) >= 4:
+                step = int(self.getScalar(onnx_node.inputs[4]))
+            else:
+                step = 1
+            offset = list(range(start, end, step))
+            slice_shape = list(np.take(np.ones(in0_shape), offset, axis=axis).shape)
 
+            # start_list and size_list for tosa
+            if self.chip == 'cpu':
+                size = len(in0_shape)
+                start_list =  [int(self.getScalar(onnx_node.inputs[1]))] * size
+                size_list = slice_shape
+                
             # add slice
             p = {
                 'name': "{}_Slice_{}".format(onnx_node.name, onnx_node.op_type),
-                'offset': list(slice_offset),
-                'steps': list(slice_step),
-                'ends': list(slice_end),
+                'axis': axis,
+                'offset': offset,
+                'start_list': start_list,
+                'size_list': size_list
             }
-            slice_op = self.mlir.create_slice_op([in0]+[self.mlir.none_op]*3, slice_shape, **p)
+            slice_op = self.mlir.create_slice_op([in0], slice_shape, **p)
             # add reshape
             p = {
                 'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
@@ -930,26 +938,28 @@ class OnnxConverter(BaseConverter):
             onnx_node.inputs[0], onnx_node.inputs[1] = rhs, lhs
             self.convert_mul_op(onnx_node)
             return
-
+        
         op0 = self.getOperand(lhs)
         output_shape = self.getShape(onnx_node.name)
 
         if (not self.isWeight(lhs)) and self.isWeight(rhs):
+            weight = self.getWeight(rhs)
             # weight reorder for tosa
             if len(lhs_shape) == 3 and (len(rhs_shape) == 1 or len(rhs_shape) == 0) and self.chip == "cpu":
-                weight = self.getWeight(rhs)
                 weight = weight.reshape(1,1,-1)
-                self.tensors[rhs] = weight
-                self.shapes[rhs] = weight.shape
-                weight_op = self.getWeightOp(rhs)
-                p = {
-                    'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
-                }
-                mul_op = self.mlir.create_mul_op([op0, weight_op], output_shape, **p)
-                self.addOperand(onnx_node.name, mul_op)
-                return
+            elif len(lhs_shape) == 2 and (len(rhs_shape) == 1 or len(rhs_shape) == 0) and self.chip == "cpu":
+                weight = weight.reshape(1,-1)
             else:
-                raise RuntimeError("not support now")
+                raise RuntimeError("not suppport now")
+            self.tensors[rhs] = weight
+            self.shapes[rhs] = weight.shape
+            weight_op = self.getWeightOp(rhs)
+            p = {
+                'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+            }
+            mul_op = self.mlir.create_mul_op([op0, weight_op], output_shape, **p)
+            self.addOperand(onnx_node.name, mul_op)
+            return
         else:
             if lhs_shape == rhs_shape:
                 op1 = self.getOperand(rhs)
@@ -960,6 +970,7 @@ class OnnxConverter(BaseConverter):
                 self.addOperand(onnx_node.name, mul_op)
             else:
                 raise RuntimeError("not support now")
+
 
     def convert_erf_op(self, onnx_node):
         assert (onnx_node.op_type == "Erf")

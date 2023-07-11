@@ -193,8 +193,7 @@ def Top_ReshapeOp:Top_Op<"Reshape"> {
   }];
   let arguments = (ins
     AnyTensor:$input,
-    OptionalAttr<I64ArrayAttr>:$shape,
-    OptionalAttr<I64ArrayAttr>:$new_shape
+    OptionalAttr<I64ArrayAttr>:$shape
   );
   let results = (outs AnyTensor:$output);
   //let hasCanonicalizer = 1;

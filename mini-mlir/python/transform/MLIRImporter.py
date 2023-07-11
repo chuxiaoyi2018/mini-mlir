@@ -326,8 +326,7 @@ class MLIRImporter(object):
     def create_reshape_op(self, operands, output_shape, **kargs):
         output_type = self.get_tensor_type(output_shape)        
         param = {
-            'name': StringAttr.get(kargs['name']),
-            'new_shape': self.ArrayAttr(kargs['new_shape']),
+            'name': StringAttr.get(kargs['name'])
         }
         return self.buildOp(Top.ReshapeOp, operands, [output_type], **param)
 

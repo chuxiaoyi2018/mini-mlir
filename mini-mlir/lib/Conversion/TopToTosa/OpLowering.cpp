@@ -345,7 +345,11 @@ void ReduceMeanLowering::Lowering(PatternRewriter &rewriter,
   std::vector<int64_t> in_shape(inType.cast<RankedTensorType>().getShape());
   std::vector<float> const_value;
   const_value.push_back(1./in_shape[in_shape.size()-1]);
-  auto const_ty = RankedTensorType::get({1,1,1}, rewriter.getF32Type());
+  std::vector<int64_t> const_shape;
+  for (int i = 0; i < size ; i++) {
+    const_shape.push_back(1);
+  }
+  auto const_ty = RankedTensorType::get(const_shape, rewriter.getF32Type());
   DenseElementsAttr attr = DenseElementsAttr::get(
       const_ty, llvm::ArrayRef(const_value.data(), const_value.size()));
   auto constop =
