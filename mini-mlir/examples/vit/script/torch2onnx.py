@@ -23,14 +23,16 @@ class vit_lite(torch.nn.Module):
         super().__init__()
         self.model = model
     def forward(self, x):
-        x = self.model.vit.embeddings(x)
-        # x = self.model.vit.encoder.layer[0](x)
+        x = self.model.vit.embeddings.patch_embeddings(x)
+        # import pdb;pdb.set_trace()
+        # x = self.model.vit.encoder.layer[0].attention.attention(x)[0]
+
+        # x = self.model.vit.encoder.layer[0](x)[0]
         # x = self.model.vit.layernorm(x[0])
         # x = self.model.classifier(x[:,0:1])
         return x
             
-lite_model = vit_lite(model)
-
+lite_model = vit_lite(model).eval()
 data = np.load('dog.npz')
 inputs = torch.FloatTensor(data['arr_0'])
 # import pdb;pdb.set_trace()

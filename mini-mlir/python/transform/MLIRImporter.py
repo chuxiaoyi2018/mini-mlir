@@ -10,6 +10,7 @@ class Top:
     AvgPoolOp = 'top.AvgPool'
     BatchNormOp = 'top.BatchNorm'
     ConvOp = 'top.Conv'
+    ConvPermuteOp = 'top.ConvPermute'
     ConcatOp = 'top.Concat'
     ErfOp = 'top.Erf'
     GELUOp = 'top.GELU'
@@ -235,6 +236,30 @@ class MLIRImporter(object):
             param['inserts'] = self.ArrayAttr(kargs['inserts'])
         return self.buildOp(Top.ConvOp, operands, [output_type], **param)
 
+    def create_conv_permute_op(self, operands, output_shape, **kargs):
+        """
+            operands: List[pybind.op]
+            output_tensorshape: List[int] output tensor type
+            attrs: Dict, about op attrs
+        """
+        # get_value_type
+        output_type = RankedTensorType.get(tuple(output_shape), self.get_value_type(operands[0]))
+
+        param = {
+            'name': StringAttr.get(kargs['name']),
+            'kernel_shape': self.ArrayAttr(kargs['kernel_shape']),
+            'strides': self.ArrayAttr(kargs['strides']),
+            'dilations': self.ArrayAttr(kargs['dilations']),
+            'pads': self.ArrayAttr(kargs['pads']),
+            'group': IntegerAttr.get(self.mlir_type['INT64'], kargs['group']),
+            'do_relu': BoolAttr.get(kargs['do_relu']),
+            'new_shape': self.ArrayAttr(kargs['new_shape']),
+            'channel_last_conv_shape': self.ArrayAttr(kargs['channel_last_conv_shape']),
+        }
+        if 'inserts' in kargs:
+            param['inserts'] = self.ArrayAttr(kargs['inserts'])
+        return self.buildOp(Top.ConvPermuteOp, operands, [output_type], **param)
+
     def create_concat_op(self, operands, output_shape, **kargs):
         output_type = self.get_tensor_type(output_shape)
         param = {
@@ -301,7 +326,8 @@ class MLIRImporter(object):
     def create_reshape_op(self, operands, output_shape, **kargs):
         output_type = self.get_tensor_type(output_shape)        
         param = {
-            'name': StringAttr.get(kargs['name'])
+            'name': StringAttr.get(kargs['name']),
+            'new_shape': self.ArrayAttr(kargs['new_shape']),
         }
         return self.buildOp(Top.ReshapeOp, operands, [output_type], **param)
 

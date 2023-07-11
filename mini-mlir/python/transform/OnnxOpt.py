@@ -643,6 +643,37 @@ def TorchGELUPattern(patterns: list):
     patterns.append(
         ReformInfo(name="GELU", src_nodes=[_div, _erf, _add, _mu_0, _mul_1], dst_nodes=[gelu]))
 
+############ Conv+Reshape+Permute/Transpose ############
+def TorchConvPermutePattern(patterns: list):
+    _input = OuterNode()
+    weight_tensor = OuterNode(is_tensor=True)
+    bias_tensor = OuterNode(is_tensor=True)
+    reshape_tensor = OuterNode(is_tensor=True)
+    
+    _conv = PatternNode("Conv", 
+                        [_input, weight_tensor, bias_tensor], 
+                        ["kernel_shape", "dilations", "group", "pads", "strides"])
+    _reshape = PatternNode("Reshape", [_conv, reshape_tensor])
+    _permute = PatternNode("Transpose", [_reshape]) # named Transpose in onnx
+    
+    kernel_shape_attrfunc = AttrFunctor([_conv], ["kernel_shape"])
+    dilations_attrfunc = AttrFunctor([_conv], ["dilations"])
+    group_attrfunc = AttrFunctor([_conv], ["group"])
+    pads_attrfunc = AttrFunctor([_conv], ["pads"])
+    strides_attrfunc = AttrFunctor([_conv], ["strides"])
+
+
+    conv_permute = PatternNode("ConvPermute", [_input, weight_tensor, bias_tensor],
+                            attrmap={
+                                "kernel_shape": kernel_shape_attrfunc,
+                                "dilations": dilations_attrfunc,
+                                "group": group_attrfunc,
+                                "pads": pads_attrfunc,
+                                "strides": strides_attrfunc,
+                            })
+    patterns.append(
+        ReformInfo(name="ConvPermute", src_nodes=[_conv, _reshape, _permute], dst_nodes=[conv_permute]))
+
 def remove_tensor_from_input(model):
     tensor_names = [x.name for x in model.graph.initializer]
     tensor_names.extend([x.name for x in model.graph.node if x.op_type == "Constant"])
@@ -660,7 +691,8 @@ def onnx_opt(model, dump=False, rigorous=True):
     # add your patterns here if you expect that your patterns actually works
     pattern_functions = [
         # TorchLayerNormPattern,
-        TorchGELUPattern
+        TorchGELUPattern,
+        TorchConvPermutePattern
     ]
 
     patterns = []

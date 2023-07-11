@@ -102,6 +102,30 @@ def Top_ConvOp: Top_Op<"Conv"> {
   //let hasCanonicalizer = 1;
 }
 
+def Top_ConvPermuteOp: Top_Op<"ConvPermute"> {
+  let summary = "Convolution Reshape Permute operator";
+
+  let description = [{Conv + Reshape + Permute for tosa}];
+
+  let arguments = (ins
+    AnyTensor:$input,
+    AnyTensor:$filter,
+    AnyTensorOrNone:$bias,
+    I64ArrayAttr:$kernel_shape,
+    I64ArrayAttr:$strides,
+    I64ArrayAttr:$pads, // top,left,bottom,right
+    I64ArrayAttr:$new_shape,
+    I64ArrayAttr:$channel_last_conv_shape,
+    DefaultValuedAttr<I64Attr, "1">:$group,
+    OptionalAttr<I64ArrayAttr>:$dilations,
+    DefaultValuedAttr<BoolAttr, "false">:$do_relu,
+    DefaultValuedAttr<F64Attr, "-1.0">:$relu_limit
+  );
+
+  let results = (outs AnyTensor:$output);
+  //let hasCanonicalizer = 1;
+}
+
 
 def Top_ConcatOp: Top_Op<"Concat"> {
   let summary = "Concat operator";
@@ -169,7 +193,8 @@ def Top_ReshapeOp:Top_Op<"Reshape"> {
   }];
   let arguments = (ins
     AnyTensor:$input,
-    OptionalAttr<I64ArrayAttr>:$shape
+    OptionalAttr<I64ArrayAttr>:$shape,
+    OptionalAttr<I64ArrayAttr>:$new_shape
   );
   let results = (outs AnyTensor:$output);
   //let hasCanonicalizer = 1;
