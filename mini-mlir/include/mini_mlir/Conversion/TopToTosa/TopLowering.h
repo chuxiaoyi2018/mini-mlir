@@ -43,6 +43,18 @@ static Type change_dataformat(Type ty_){
   return RankedTensorType::get(newShape, ty.getElementType());
 }
 
+// NCH -> NHC
+static Type change_dataformat_3D(Type ty_){
+  auto ty = ty_.cast<RankedTensorType>();
+  if (ty.getShape().size() != 3) return ty;
+  auto n = ty.getShape()[0]; // N
+  auto h = ty.getShape()[2]; // H
+  auto c = ty.getShape()[1]; // C
+  std::vector<int64_t> newShape{n, h, c};
+  return RankedTensorType::get(newShape, ty.getElementType());
+}
+
+
 // reorder weight for tosa  [N,C,H,W] -> [N,H,W,C]
 static float* change_weight(std::shared_ptr<std::vector<float>> valptr, 
                                     Type ty_) {

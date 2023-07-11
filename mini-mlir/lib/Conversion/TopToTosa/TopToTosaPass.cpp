@@ -70,7 +70,7 @@ public:
   LogicalResult matchAndRewrite(top::WeightOp op,
                                 PatternRewriter &rewriter) const override {
     assert(op->getNumResults() == 1);
-    auto outType = op->getResult(0).getType();
+    auto outType = change_dataformat(op->getResult(0).getType());
     auto has_weight = include_weight;
     for (auto user : op.getOutput().getUsers()) {
       if (isa<tosa::TransposeOp>(user)) {
@@ -79,13 +79,10 @@ public:
     }
     if (has_weight) {
       auto valptr = op.read_as_float();
-      // change_weight for [N,C,H,W] -> [N,H,W,C]
-      // auto new_val = change_weight(valptr, op->getResult(0).getType());
-      // auto attr = DenseElementsAttr::get(
-      //     outType.cast<RankedTensorType>(), llvm::ArrayRef(new_val, valptr->size()));
+      auto new_val = change_weight(valptr, op->getResult(0).getType());
       auto attr = DenseElementsAttr::get(
-          outType.cast<RankedTensorType>(), llvm::ArrayRef(valptr->data(), valptr->size()));
-      rewriter.replaceOpWithNewOp<mlir::tosa::ConstOp>(op, op->getResult(0).getType(), attr);
+          outType.cast<RankedTensorType>(), llvm::ArrayRef(new_val, valptr->size()));
+      rewriter.replaceOpWithNewOp<mlir::tosa::ConstOp>(op, outType, attr);
     } else {
       // auto out_shape = outType.cast<RankedTensorType>().getShape();
       // auto out_ty = RankedTensorType::get(out_shape, rewriter.getF32Type());

@@ -104,6 +104,7 @@ class OnnxConverter(BaseConverter):
             "AveragePool": lambda node: self.convert_avgpool_op(node),
             "BatchNormalization": lambda node: self.convert_batchnorm_op(node),
             "Conv": lambda node: self.convert_conv_op(node),
+            "ConvPermute": lambda node: self.convert_conv_permute_op(node),
             "Concat": lambda node: self.convert_concat_op(node),
             "Erf": lambda node: self.convert_erf_op(node),
             "Flatten": lambda node: self.convert_flatten_op(node),
@@ -419,6 +420,58 @@ class OnnxConverter(BaseConverter):
         else:
             raise RuntimeError("not support now")
 
+    def convert_conv_permute_op(self, onnx_node):
+        assert (onnx_node.op_type == "ConvPermute")
+        if self.chip == "cpu" and len(onnx_node.inputs) == 3:
+            op = self.getOperand(onnx_node.inputs[0])
+            kernel_shape = onnx_node.attrs['kernel_shape']
+            dim = len(kernel_shape)
+            dilations = onnx_node.attrs.get("dilations", dim * [1])
+            group = onnx_node.attrs.get("group", 1)
+            pads = onnx_node.attrs.get("pads", dim * 2 * [0])
+            strides = onnx_node.attrs.get("strides", dim * [1])
+
+            input_shape = self.getShape(onnx_node.inputs[0])
+            filter_shape = self.getShape(onnx_node.inputs[1])
+
+            # simple shape inference
+            if strides != kernel_shape or sum(pads) != 0 or sum(dilations) != len(dilations):
+                raise RuntimeError("not support now")
+            channel_last_conv_shape = [input_shape[0], 
+                                       input_shape[2]//(kernel_shape[0]), 
+                                       input_shape[3]//(kernel_shape[1]),
+                                       filter_shape[0],
+                                       ]
+
+            operands = list()
+            operands.append(op)
+            filter_op = self.getWeightOp(onnx_node.inputs[1])
+            operands.append(filter_op)
+            if len(onnx_node.inputs) > 2:
+                bias_op = self.getWeightOp(onnx_node.inputs[2])
+            else:
+                bias_op = self.mlir.none_op
+            operands.append(bias_op)
+            output_shape = self.getShape(onnx_node.name)
+
+            p = {
+                'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+                'kernel_shape': kernel_shape,
+                'strides': strides,
+                'dilations': dilations,
+                'pads': pads,
+                'group': group,
+                'do_relu': False,
+                'ins': [],
+                'channel_last_conv_shape': channel_last_conv_shape,
+                'new_shape': output_shape
+            }
+            new_op = self.mlir.create_conv_permute_op(operands, output_shape, **p)
+            self.addOperand(onnx_node.name, new_op)
+
+        else:
+            raise RuntimeError("not support now")
+
     def convert_flatten_op(self, onnx_node):
         assert (onnx_node.op_type == "Flatten")
         op = self.getOperand(onnx_node.inputs[0])
@@ -574,7 +627,10 @@ class OnnxConverter(BaseConverter):
         assert (onnx_node.op_type == "Reshape")
         op = self.getOperand(onnx_node.inputs[0])
         output_shape = self.getShape(onnx_node.name)
-        p = {'name': "{}_{}".format(onnx_node.name, onnx_node.op_type)}
+        p = {
+            'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+            'new_shape': output_shape
+        }
         new_op = self.mlir.create_reshape_op([op], output_shape, **p)
         self.addOperand(onnx_node.name, new_op)
     
