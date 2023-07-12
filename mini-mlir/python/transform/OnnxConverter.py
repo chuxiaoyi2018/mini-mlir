@@ -722,10 +722,26 @@ class OnnxConverter(BaseConverter):
             eps = eps[0]
         # stash_type is not important
         wb_shape = [1 if i < axis else input_shape[i] for i in range(num_dims)]
+        size = len(self.getShape(onnx_node.inputs[0]))
+
         input_opd = self.getOperand(onnx_node.inputs[0])
-        scale_opd = self.mlir.none_op
-        bias_opd = self.mlir.none_op
-        if len(onnx_node.inputs) != 3:
+        if len(onnx_node.inputs) == 3:
+            inner_dim = self.getShape(onnx_node.inputs[1])[0]
+            new_shape = [inner_dim if s == inner_dim else 1 for s in input_shape]
+            scale_weight = self.getWeight(onnx_node.inputs[1]).reshape(new_shape)
+            self.tensors[onnx_node.inputs[1]] = scale_weight
+            self.shapes[onnx_node.inputs[1]] = scale_weight.shape
+
+            bias_weight = self.getWeight(onnx_node.inputs[2]).reshape(new_shape)
+            self.tensors[onnx_node.inputs[2]] = bias_weight
+            self.shapes[onnx_node.inputs[2]] = bias_weight.shape
+
+            scale_opd = self.getWeightOp(onnx_node.inputs[1])
+            bias_opd = self.getWeightOp(onnx_node.inputs[2])
+        elif len(onnx_node) == 1:
+            scale_opd = self.mlir.none_op
+            bias_opd = self.mlir.none_op
+        else:
             raise ValueError(f"not support layernorm when len(onnx_node.inputs) == {len(onnx_node.inputs)}")
         output_shape = self.getShape(onnx_node.name)
 

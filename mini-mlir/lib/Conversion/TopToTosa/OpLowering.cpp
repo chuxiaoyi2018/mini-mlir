@@ -21,7 +21,8 @@ void populateTopToTosaConversionPatterns(RewritePatternSet *patterns) {
         MulConstLowering,
         GELULowering,
         SliceLowering,
-        ConvPermuteLowering
+        ConvPermuteLowering,
+        LayerNormLowering
       // clang-format on
       >(patterns->getContext());
 }
@@ -698,5 +699,75 @@ void SoftmaxLowering::Lowering(PatternRewriter &rewriter,
   }
 }
 
+//===------------------------------------------------------------===//
+// LayerNormLowering
+//===------------------------------------------------------------===//
+void LayerNormLowering::Lowering(PatternRewriter &rewriter,
+                                 top::LayerNormOp op) const {
+  assert(op->getNumResults() == 1);
+  // auto newType = change_dataformat(op->getResult(0).getType());
+  auto outType = op->getResult(0).getType();
+  auto size = outType.cast<RankedTensorType>().getShape().size();
+  int32_t new_axis, axis = op.getAxis();
+  
+
+  if (axis > 0) 
+    new_axis = axis;
+  else
+    new_axis = size + axis;
+
+  // ReduceSumOp
+  std::vector<NamedAttribute> attrs;
+  attrs.push_back(
+      rewriter.getNamedAttr("axis", rewriter.getI64IntegerAttr(new_axis)));
+  std::vector<int64_t> out_shape(outType.cast<RankedTensorType>().getShape());
+  out_shape[new_axis] = 1;
+  auto out_type = RankedTensorType::get(
+      out_shape, outType.cast<RankedTensorType>().getElementType());
+  auto reducesum = rewriter.create<mlir::tosa::ReduceSumOp>(
+      op->getLoc(), out_type, op->getOperand(0), attrs);
+
+  // ConstOp
+  auto inType = op->getOperand(0).getType();
+  std::vector<int64_t> in_shape(inType.cast<RankedTensorType>().getShape());
+  std::vector<float> const_value;
+  const_value.push_back(1./in_shape[new_axis]);
+  std::vector<int64_t> const_shape;
+  for (int i = 0; i < size ; i++) {
+    const_shape.push_back(1);
+  }
+  auto const_ty = RankedTensorType::get(const_shape, rewriter.getF32Type());
+  DenseElementsAttr attr = DenseElementsAttr::get(
+      const_ty, llvm::ArrayRef(const_value.data(), const_value.size()));
+  auto constop =
+      rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr);
+
+  // MulOp
+  auto mul_op_0 = rewriter.create<mlir::tosa::MulOp>(op->getLoc(), outType, 
+      reducesum->getResult(0), constop->getResult(0), rewriter.getI32IntegerAttr(0));
+
+  // SubOp
+  auto sub_op = rewriter.create<mlir::tosa::SubOp>(op->getLoc(), outType, 
+      op->getOperand(0), mul_op_0->getResult(0));
+
+  // RsqrtOp
+  auto rsqrt = rewriter.create<mlir::tosa::RsqrtOp>(
+      op->getLoc(), outType, op->getOperand(0));
+
+  // MulOp
+  auto mul_op_1 = rewriter.create<mlir::tosa::MulOp>(op->getLoc(), outType, 
+      rsqrt->getResult(0), op->getOperand(1), rewriter.getI32IntegerAttr(0));
+
+  // MulOp
+  auto mul_op_2 = rewriter.create<mlir::tosa::MulOp>(op->getLoc(), outType, 
+      mul_op_1->getResult(0), sub_op->getResult(0), rewriter.getI32IntegerAttr(0));
+
+  // AddOp
+  auto add_op = rewriter.create<mlir::tosa::AddOp>(op->getLoc(), outType, 
+      mul_op_2->getResult(0), op->getOperand(2));
+
+  // Output
+  rewriter.replaceOp(op, add_op->getResults());
+}
 
 } // namespace mini_mlir

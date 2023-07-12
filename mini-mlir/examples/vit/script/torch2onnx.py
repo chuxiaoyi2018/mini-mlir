@@ -4,8 +4,8 @@ import requests
 import torch
 import numpy as np
 
-url = 'http://images.cocodataset.org/val2017/000000039769.jpg'
-image = Image.open(requests.get(url, stream=True).raw)
+# url = 'http://images.cocodataset.org/val2017/000000039769.jpg'
+# image = Image.open(requests.get(url, stream=True).raw)
 
 processor = ViTImageProcessor.from_pretrained('google/vit-base-patch16-224')
 model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224')
@@ -24,10 +24,9 @@ class vit_lite(torch.nn.Module):
         self.model = model
     def forward(self, x):
         x = self.model.vit.embeddings(x)
-        # import pdb;pdb.set_trace()
+        # for layer in self.model.vit.encoder.layer:
+        #     x = layer(x)[0]
         x = self.model.vit.encoder.layer[0](x)[0]
-
-        # x = self.model.vit.encoder.layer[0](x)[0]
         x = self.model.vit.layernorm(x[:,0:1])
         x = self.model.classifier(x)
         return x
@@ -39,4 +38,4 @@ inputs = torch.FloatTensor(data['arr_0'])
 output = np.around(lite_model.forward(inputs).detach().numpy().flatten(), 4)
 np.savetxt('true_result.txt', output)
 
-torch.onnx.export(lite_model, torch.randn(1,3,224,224), 'vit-lite.onnx', verbose=False)
+torch.onnx.export(lite_model, torch.randn(1,3,224,224), 'vit.onnx', verbose=False)
