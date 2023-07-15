@@ -26,7 +26,7 @@ ModuleInterpreter::~ModuleInterpreter() {
 
 void ModuleInterpreter::allocate_resources() {
   auto weight_file =
-      module->getAttrOfType<StringAttr>("top.weight_file").str();
+      module->getAttrOfType<StringAttr>("module.weight_file").str();
   auto wfile = openTensorFile(weight_file);
   for (auto func : module.getOps<mlir::func::FuncOp>()) {
     // if (func.getName() != "main") {

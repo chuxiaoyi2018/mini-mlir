@@ -144,6 +144,10 @@ public:
 
 public:
   py::list opInfo_;
+  py::list all_tensor_names;
+  py::list all_weight_names;
+  py::list input_names;
+  py::list output_names;
   static std::string version;
 
 private:
@@ -169,5 +173,9 @@ PYBIND11_MODULE(pymlir, m) {
       .def("invoke", &py_module::invoke)
       .def("get_input_names", &py_module::get_input_names)
       .def("get_output_names", &py_module::get_output_names)
+      .def_readonly("input_names", &py_module::input_names)
+      .def_readonly("output_names", &py_module::output_names)
+      .def_readonly("all_tensor_names", &py_module::all_tensor_names)
+      .def_readonly("all_weight_names", &py_module::all_weight_names)
       .def_readonly_static("version", &py_module::version);
 }

@@ -15,7 +15,8 @@ export PATH=$PROJECT_ROOT/third_party/llvm/bin:$PATH
 
 # dynamic link lib
 export LD_LIBRARY_PATH=$INSTALL_PATH/lib:$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=$INSTALL_PATH/lib:$PROJECT_ROOT/capi/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$PROJECT_ROOT/capi/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$PROJECT_ROOT/third_party/calibration:$LD_LIBRARY_PATH
 
 # add module for import
 export PYTHONPATH=$INSTALL_PATH/python:$PYTHONPATH # pymlir

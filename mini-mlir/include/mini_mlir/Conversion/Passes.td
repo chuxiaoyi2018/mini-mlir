@@ -14,6 +14,12 @@ def ConvertTopToTosa : Pass<"convert-top-to-tosa", "ModuleOp"> {
   let options = [
     Option<"includeWeight", "includeWeight", "bool", /*default=*/"false",
            "true for including weight datas in tosa.mlir, or false for not">,
+    Option<"weightType", "weightType", "std::string", /*default=*/"",
+           "whether to use quantization, you can choose FP32 or INT8">,
+    Option<"tableFile", "tableFile", "std::string", /*default=*/"",
+           "calibration table file path">,
+    Option<"isAsymmetric", "isAsymmetric", "bool", /*default=*/"true",
+           "true for asymmetric quantization, or false for symmetric">,
   ];
 }
 

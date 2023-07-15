@@ -1,4 +1,9 @@
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <sstream>
 #include "mini_mlir/Conversion/TopToTosa/OpLowering.h"
+#include "mini_mlir/Conversion/TopToTosa/OpLoweringINT8.h"
 #include "mini_mlir/Conversion/Conversion.h"
 #include "mini_mlir/Support/Module.h"
 
@@ -8,59 +13,6 @@ namespace mlir {
 } // namespace mlir
 
 namespace mini_mlir {
-
-/*
-static unsigned apply_time = 0;
-struct ModifyFuncOp : public OpRewritePattern<mlir::func::FuncOp> {
-  using OpRewritePattern<mlir::func::FuncOp>::OpRewritePattern;
-  LogicalResult matchAndRewrite(mlir::func::FuncOp op,
-                                PatternRewriter &rewriter) const override {
-    if(apply_time > 0) return failure();
-    // auto sym_name = op.getSymName();
-    // auto sym_visi = op.getSymVisibilityAttr();
-    // auto arg_attr = op.getArgAttrsAttr();
-    // auto res_attr = op.getResAttrsAttr();
-    //unsigned operands_size = 0;
-    std::vector<Value> new_operands;
-    for (auto i : op->getOperands()){
-      auto new_type = change_dataformat(i.getType());
-      i.setType(new_type);
-      new_operands.push_back(i);
-    //  operands_size += 1;
-    }
-    auto funcType = op.getFunctionType();
-    std::vector<Type> new_ins;
-    std::vector<Type> new_outs;
-    for (Type in : funcType.getInputs()) {
-      Type new_in = change_dataformat(in);
-      new_ins.push_back(new_in);
-    }
-    for (Type out : funcType.getResults()) {
-      Type new_out = change_dataformat(out);
-      new_outs.push_back(new_out);
-    }
-    auto new_funcType = funcType.clone(
-                          llvm::ArrayRef(
-                              new_ins.data(), new_ins.size()),
-                          llvm::ArrayRef(
-                              new_outs.data(), new_outs.size()));
-    //op.setFunctionType(new_funcType);
-    //rewriter.replaceOpWithNewOp<mlir::func::FuncOp>(op, sym_name,
-    //                  new_funcType, sym_visi, arg_attr, res_attr);
-    rewriter.updateRootInPlace(op, [&](){op.setFunctionType(new_funcType);
-                                         op->setOperands(new_operands); });
-    apply_time += 1;
-    return success();
-  }
-};
-struct EraseTopInputOp : public OpRewritePattern<top::InputOp> {
-  using OpRewritePattern<top::InputOp>::OpRewritePattern;
-  LogicalResult matchAndRewrite(top::InputOp op,
-                                PatternRewriter &rewriter) const override {
-    rewriter.eraseOp(op);
-    return success();
-  }
-};*/
 
 struct LowerTopWeightOp : public OpRewritePattern<top::WeightOp> {
 public:
@@ -84,9 +36,6 @@ public:
           outType.cast<RankedTensorType>(), llvm::ArrayRef(new_val, valptr->size()));
       rewriter.replaceOpWithNewOp<mlir::tosa::ConstOp>(op, outType, attr);
     } else {
-      // auto out_shape = outType.cast<RankedTensorType>().getShape();
-      // auto out_ty = RankedTensorType::get(out_shape, rewriter.getF32Type());
-      // attr = DenseElementsAttr::get(out_ty, llvm::ArrayRef<float>());
       auto attr = DenseElementsAttr::get(
           RankedTensorType::get({}, rewriter.getI64Type()),
           llvm::ArrayRef<int64_t>({0}));
@@ -111,21 +60,26 @@ public:
     ConversionTarget target(*ctx_);
     target.addLegalDialect<mlir::tosa::TosaDialect, mlir::func::FuncDialect>();
 
-    // Change data format for FuncOp
-    // patterns.add<ModifyFuncOp>(ctx_);
-    // applyPatternsAndFoldGreedily(module_, std::move(patterns));
+    // Read Calibration Table
+    if (tableFile.size() > 0) {
+      std::ifstream infile(tableFile);
+    }
+    
 
     // Lower TOP Ops
     patterns.add<LowerTopWeightOp>(patterns.getContext(), includeWeight);
+
+    // Lowering to INT8
+    if (weightType == "INT8") {
+      populateTopToTosaConversionINT8Patterns(&patterns);
+    }
+    // Lowering to FP32
     populateTopToTosaConversionPatterns(&patterns);
+
     auto config = GreedyRewriteConfig();
     config.maxIterations = 1;
     applyPatternsAndFoldGreedily(module_, std::move(patterns), config);
-
-    // Erase TOP::InputOp
-    // patterns.clear();
-    // patterns.add<EraseTopInputOp>(ctx_);
-    // applyPatternsAndFoldGreedily(module_, std::move(patterns));
+    patterns.clear();
 
     module::updateModuleTypes();
     module::setState(module::State::TOSA_F32);
@@ -135,6 +89,7 @@ protected:
   ModuleOp module_;
   FuncOp mainFunc_;
   MLIRContext *ctx_;
+  std::string table_file;
 };
 
 std::unique_ptr<Pass> createConvertTopToTosa() {
