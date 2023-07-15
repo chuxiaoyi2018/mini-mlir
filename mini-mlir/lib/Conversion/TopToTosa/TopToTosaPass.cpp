@@ -61,9 +61,28 @@ public:
     target.addLegalDialect<mlir::tosa::TosaDialect, mlir::func::FuncDialect>();
 
     // Read Calibration Table
-    if (tableFile.size() > 0) {
-      std::ifstream infile(tableFile);
+    std::ifstream infile(this->tableFile);
+    if (!infile) {
+      llvm_unreachable("can't open calibration table file!");
     }
+
+    std::vector<std::string> names;
+    std::vector<float> thresholds;
+
+    std::string line;
+    while (std::getline(infile, line)) {
+      std::stringstream linestream(line);
+      std::string name;
+      float threshold;
+
+      std::getline(linestream, name, ',');
+      linestream >> threshold;
+
+      names.push_back(name);
+      thresholds.push_back(threshold);
+    }
+
+    infile.close();
     
 
     // Lower TOP Ops
