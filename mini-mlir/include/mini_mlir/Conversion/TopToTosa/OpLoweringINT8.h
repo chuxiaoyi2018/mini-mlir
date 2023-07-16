@@ -16,6 +16,8 @@ void populateTopToTosaConversionINT8Patterns(RewritePatternSet *patterns, std::m
       std::map<std::string, float> calibration_map;                                             \
   };
 // clang-format off
+OpLoweringINT8(Add)
 OpLoweringINT8(Reshape)
 // clang-format on
+
 } // namespace mini_mlir

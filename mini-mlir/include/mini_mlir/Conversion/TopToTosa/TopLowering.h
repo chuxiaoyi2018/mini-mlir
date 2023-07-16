@@ -104,4 +104,69 @@ static std::vector<NamedAttribute> gen_clamp_attr(PatternRewriter &rewriter,
   return clamp_attr;
 }
 
+
+
+static mlir::tosa::CastOp lowering_quantize(PatternRewriter &rewriter, mlir::Value in_value, mlir::Type inType, 
+                                     mlir::Location loc, std::vector<int64_t> in_shape, float threshold) {
+  // ConstOp inv_scale
+  int in_size = in_shape.size();
+  std::vector<float> inv_scale;
+  inv_scale.push_back(127./threshold);
+  std::vector<int64_t> const_shape;
+  for (int i = 0; i < in_size ; i++) {
+    const_shape.push_back(1);
+  }
+  auto const_ty = RankedTensorType::get({const_shape}, rewriter.getF32Type());
+  DenseElementsAttr attr = DenseElementsAttr::get(
+      const_ty, llvm::ArrayRef(inv_scale.data(), inv_scale.size()));
+  auto const_inv_scale =
+      rewriter.create<mlir::tosa::ConstOp>(loc, const_ty, attr);
+
+  // MulOp for int8
+  auto mul_inv_scale_op = rewriter.create<mlir::tosa::MulOp>(loc, inType,
+      in_value, const_inv_scale->getResult(0), rewriter.getI32IntegerAttr(0));
+
+  // CastOp fp32->int8
+  auto cast2int8_ty = RankedTensorType::get({in_shape}, rewriter.getI8Type());
+  auto cast2int8_op =
+      rewriter.create<mlir::tosa::CastOp>(loc, cast2int8_ty, mul_inv_scale_op->getResult(0));
+  return cast2int8_op;
+}
+
+static mlir::tosa::MulOp lowering_dequantize(PatternRewriter &rewriter, mlir::Value in_value, mlir::Type outType, 
+                                      mlir::Location loc, std::vector<int64_t> out_shape, float threshold) {
+  // CastOp int8->fp32
+  auto cast2fp32_ty = RankedTensorType::get({out_shape}, rewriter.getF32Type());
+  auto cast2fp32_op =
+      rewriter.create<mlir::tosa::CastOp>(loc, cast2fp32_ty, in_value);
+  
+  // ConstOp scale
+  int out_size = out_shape.size();
+  std::vector<float> scale;
+  scale.push_back(threshold/127.);
+  std::vector<int64_t> const_shape;
+  for (int i = 0; i < out_size ; i++) {
+    const_shape.push_back(1);
+  }
+  auto const_ty = RankedTensorType::get({const_shape}, rewriter.getF32Type());
+  DenseElementsAttr attr = DenseElementsAttr::get(
+      const_ty, llvm::ArrayRef(scale.data(), scale.size()));
+  auto const_scale =
+      rewriter.create<mlir::tosa::ConstOp>(loc, const_ty, attr);
+
+  // MulOp for fp32
+  auto mul_scale_op = rewriter.create<mlir::tosa::MulOp>(loc, outType, 
+      cast2fp32_op->getResult(0), const_scale->getResult(0), rewriter.getI32IntegerAttr(0));
+  return mul_scale_op;
+}
+
+static float weight_threshold(top::WeightOp weight_op) {
+  auto valptr = weight_op.read_as_float();
+  std::vector<float> data = *valptr.get();
+  std::sort(data.begin(), data.end());
+  int index = data.size() * 0.95;
+  float percentile = data[index];
+  return percentile;
+}
+
 } // namespace mini_mlir
