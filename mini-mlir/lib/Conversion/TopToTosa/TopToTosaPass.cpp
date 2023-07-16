@@ -14,9 +14,9 @@ namespace mlir {
 
 namespace mini_mlir {
 
-struct LowerTopWeightOp : public OpRewritePattern<top::WeightOp> {
+struct WeightLowering : public OpRewritePattern<top::WeightOp> {
 public:
-  LowerTopWeightOp(MLIRContext *ctx, bool include_weight)
+  WeightLowering(MLIRContext *ctx, bool include_weight)
       : OpRewritePattern(ctx), include_weight(include_weight) {}
 
   LogicalResult matchAndRewrite(top::WeightOp op,
@@ -66,8 +66,7 @@ public:
       llvm_unreachable("can't open calibration table file!");
     }
 
-    std::vector<std::string> names;
-    std::vector<float> thresholds;
+    std::map<std::string, float> calibration_map;
 
     std::string line;
     while (std::getline(infile, line)) {
@@ -78,19 +77,18 @@ public:
       std::getline(linestream, name, ',');
       linestream >> threshold;
 
-      names.push_back(name);
-      thresholds.push_back(threshold);
+      calibration_map[name] = threshold; 
     }
 
     infile.close();
     
 
     // Lower TOP Ops
-    patterns.add<LowerTopWeightOp>(patterns.getContext(), includeWeight);
+    patterns.add<WeightLowering>(patterns.getContext(), includeWeight);
 
     // Lowering to INT8
     if (weightType == "INT8") {
-      populateTopToTosaConversionINT8Patterns(&patterns);
+      populateTopToTosaConversionINT8Patterns(&patterns, calibration_map);
     }
     // Lowering to FP32
     populateTopToTosaConversionPatterns(&patterns);

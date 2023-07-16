@@ -692,7 +692,7 @@ def onnx_opt(model, dump=False, rigorous=True):
     pattern_functions = [
         # TorchLayerNormPattern,
         TorchGELUPattern,
-        # TorchConvPermutePattern
+        TorchConvPermutePattern
     ]
 
     patterns = []
