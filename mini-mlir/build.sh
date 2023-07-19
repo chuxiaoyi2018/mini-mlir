@@ -8,6 +8,11 @@ if [[ -z "$INSTALL_PATH" ]]; then
   exit 1
 fi
 
+if which clang &> /dev/null; then
+  echo "clang is in PATH"
+else
+  apt install clang
+fi
 
 BUILD_FLAG="-DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS=-ggdb"
 

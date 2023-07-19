@@ -82,19 +82,24 @@ public:
 
     infile.close();
     
+    auto config = GreedyRewriteConfig();
+    config.maxIterations = 1;
 
-    // Lower TOP Ops
-    patterns.add<WeightLowering>(patterns.getContext(), includeWeight);
-
+    // Match Order: int8 -> fp32 -> weight
     // Lowering to INT8
     if (weightType == "INT8") {
       populateTopToTosaConversionINT8Patterns(&patterns, calibration_map);
+      applyPatternsAndFoldGreedily(module_, std::move(patterns), config);
+      patterns.clear();
     }
+
     // Lowering to FP32
     populateTopToTosaConversionPatterns(&patterns);
+    applyPatternsAndFoldGreedily(module_, std::move(patterns), config);
+    patterns.clear();
 
-    auto config = GreedyRewriteConfig();
-    config.maxIterations = 1;
+    // Lower weight
+    patterns.add<WeightLowering>(patterns.getContext(), includeWeight);
     applyPatternsAndFoldGreedily(module_, std::move(patterns), config);
     patterns.clear();
 
