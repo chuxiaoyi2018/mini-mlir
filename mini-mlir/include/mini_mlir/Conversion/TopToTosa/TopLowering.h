@@ -107,7 +107,6 @@ static std::vector<NamedAttribute> gen_clamp_attr(PatternRewriter &rewriter,
 }
 
 
-
 static mlir::tosa::CastOp lowering_quantize(PatternRewriter &rewriter, mlir::Value in_value, mlir::Type inType, 
                                 mlir::Type eleType, mlir::Location loc, float threshold) {
   // ConstOp inv_scale
@@ -178,15 +177,15 @@ static float get_weight_threshold(PatternRewriter &rewriter, top::WeightOp weigh
 }
 
 
-template <typename T>
-auto getVector(const T& input) {
-  if constexpr(std::is_same_v<T, int8_t>) {
-    return std::vector<int8_t>();
-  } else if constexpr(std::is_same_v<T, int32_t>) {
-    return std::vector<int32_t>();
-  } 
-  return std::vector<int32_t>();
-}
+// template <typename T>
+// auto getVector(const T& input) {
+//   if constexpr(std::is_same_v<T, int8_t>) {
+//     return std::vector<int8_t>();
+//   } else if constexpr(std::is_same_v<T, int32_t>) {
+//     return std::vector<int32_t>();
+//   } 
+//   return std::vector<int32_t>();
+// }
 
 
 static mlir::tosa::ConstOp lowering_weight_int8(PatternRewriter &rewriter, top::WeightOp weight_op, 
@@ -262,5 +261,8 @@ static mlir::tosa::ConstOp lowering_weight_int32(PatternRewriter &rewriter, top:
 
   return const_op;
 }
+
+
+
 
 } // namespace mini_mlir

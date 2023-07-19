@@ -437,7 +437,7 @@ void MatMulLowering::Lowering(PatternRewriter &rewriter,
     auto matmul = rewriter.create<mlir::tosa::MatMulOp>(
         op->getLoc(), newType, op->getOperand(0), op->getOperand(1));
     rewriter.replaceOp(op, matmul->getResults());
-  } else if (leftSize == 4 && rightSize == 4 && leftShape[0] == 1 and rightShape[0] == 1) {
+  } else if (leftSize == 4 && rightSize == 4 && leftShape[0] == 1 && rightShape[0] == 1) {
     // ReshapeOp
     std::vector<int64_t> newLeftShape(leftShape.begin() + 1, leftShape.end());
     std::vector<int64_t> newRightShape(rightShape.begin() + 1, rightShape.end());

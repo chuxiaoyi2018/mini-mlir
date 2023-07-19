@@ -66,24 +66,28 @@ public:
       llvm_unreachable("can't open calibration table file!");
     }
 
-    std::map<std::string, float> calibration_map;
+    std::map<std::string, std::vector<float>> calibration_map;
 
     std::string line;
     while (std::getline(infile, line)) {
       std::stringstream linestream(line);
       std::string name;
-      float threshold;
-
       std::getline(linestream, name, ',');
-      linestream >> threshold;
 
-      calibration_map[name] = threshold; 
+      std::string value;
+      std::vector<float> thresholds;
+
+      while (std::getline(linestream, value, ',')) {
+        thresholds.push_back(atof(value.c_str()));
+      }
+      calibration_map[name] = thresholds; 
     }
 
     infile.close();
     
     auto config = GreedyRewriteConfig();
     config.maxIterations = 1;
+
 
     // Match Order: int8 -> fp32 -> weight
     // Lowering to INT8
