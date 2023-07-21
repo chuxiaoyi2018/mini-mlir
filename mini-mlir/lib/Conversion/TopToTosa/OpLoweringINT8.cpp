@@ -365,7 +365,7 @@ void MulLoweringINT8::Lowering(PatternRewriter &rewriter, top::MulOp op) const {
 }
 
 //===------------------------------------------------------------===//
-// GELULoweringINT8  min -> -0.21
+// GELULoweringINT8
 //===------------------------------------------------------------===//
 void GELULoweringINT8::Lowering(PatternRewriter &rewriter,
                                 top::GELUOp op) const {
@@ -390,7 +390,7 @@ void GELULoweringINT8::Lowering(PatternRewriter &rewriter,
   // auto in_zp = -in_fmin/in_scale + qmin;
 
   auto out_scale = (out_fmax - out_fmin) / (qmax - qmin);
-  auto out_zp = -out_fmin / out_scale + qmin;
+  auto out_zp = - out_fmin / out_scale + qmin;
 
   Location loc = op->getLoc();
   auto inType = op->getOperand(0).getType();
@@ -403,8 +403,7 @@ void GELULoweringINT8::Lowering(PatternRewriter &rewriter,
       lowering_quantize(rewriter, op->getOperand(0), inType,
                         rewriter.getI8Type(), loc, inv_scale_value);
 
-  // make table
-  // ConstOp
+  // ConstOp make table
   mlir::tosa::ConstOp table_op = create_lookup_table(
       rewriter, op->getLoc(), in_threshold, out_scale, out_zp, [](double x) {
         return 0.5 * x *
@@ -418,10 +417,9 @@ void GELULoweringINT8::Lowering(PatternRewriter &rewriter,
       op->getLoc(), actionType, cast2int8_op->getResult(0),
       table_op->getResult(0));
 
-  // MulOp
-  // float scale_value = 5 / 255.;
+  // dequantize
   auto mul_scale_op = lowering_dequantize(rewriter, action_op->getResult(0),
-                                          outType, loc, out_scale, -out_zp);
+                                          outType, loc, out_scale, out_zp);
 
   // Replace
   rewriter.replaceOp(op, mul_scale_op->getResults());
