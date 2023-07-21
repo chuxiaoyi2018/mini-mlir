@@ -4,19 +4,27 @@
 
 namespace mini_mlir {
 
-void populateTopToTosaConversionINT8Patterns(RewritePatternSet *patterns, std::map<std::string, std::vector<float>> threshold_map, 
-                          std::map<std::string, std::vector<float>> fmin_map, std::map<std::string, std::vector<float>> fmax_map);
+void populateTopToTosaConversionINT8Patterns(
+    RewritePatternSet *patterns,
+    std::map<std::string, std::vector<float>> threshold_map,
+    std::map<std::string, std::vector<float>> fmin_map,
+    std::map<std::string, std::vector<float>> fmax_map);
 
-#define OpLoweringINT8(OP)                                                       \
-  struct OP##LoweringINT8 : public TopLoweringToTosa<top::OP##Op> {              \
-    public:                                                                      \
-      OP##LoweringINT8(MLIRContext *ctx, std::map<std::string, std::vector<float>> threshold_map, std::map<std::string, std::vector<float>> fmin_map, std::map<std::string, std::vector<float>> fmax_map)          \
-        : TopLoweringToTosa<top::OP##Op>(ctx), threshold_map(threshold_map), fmin_map(fmin_map), fmax_map(fmax_map){}          \
-      void Lowering(PatternRewriter &rewriter, top::OP##Op op) const override;   \
-    private:                                                                     \
-      std::map<std::string, std::vector<float>> threshold_map;                                             \
-      std::map<std::string, std::vector<float>> fmin_map;                                             \
-      std::map<std::string, std::vector<float>> fmax_map;                                             \
+#define OpLoweringINT8(OP)                                                     \
+  struct OP##LoweringINT8 : public TopLoweringToTosa<top::OP##Op> {            \
+  public:                                                                      \
+    OP##LoweringINT8(MLIRContext *ctx,                                         \
+                     std::map<std::string, std::vector<float>> threshold_map,  \
+                     std::map<std::string, std::vector<float>> fmin_map,       \
+                     std::map<std::string, std::vector<float>> fmax_map)       \
+        : TopLoweringToTosa<top::OP##Op>(ctx), threshold_map(threshold_map),   \
+          fmin_map(fmin_map), fmax_map(fmax_map) {}                            \
+    void Lowering(PatternRewriter &rewriter, top::OP##Op op) const override;   \
+                                                                               \
+  private:                                                                     \
+    std::map<std::string, std::vector<float>> threshold_map;                   \
+    std::map<std::string, std::vector<float>> fmin_map;                        \
+    std::map<std::string, std::vector<float>> fmax_map;                        \
   };
 // clang-format off
 OpLoweringINT8(Reshape)

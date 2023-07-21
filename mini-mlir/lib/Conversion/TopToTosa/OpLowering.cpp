@@ -143,9 +143,9 @@ void ConvLowering::Lowering(PatternRewriter &rewriter, top::ConvOp op) const {
       std::vector<float> bias(oc, 0);
       auto const_ty = RankedTensorType::get({oc}, rewriter.getF32Type());
       DenseElementsAttr attr = DenseElementsAttr::get(
-              const_ty, llvm::ArrayRef(bias.data(), bias.size()));
+          const_ty, llvm::ArrayRef(bias.data(), bias.size()));
       auto constop =
-              rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr);
+          rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr);
       operands.push_back(constop->getResult(0));
     } else {
       operands.push_back(op->getOperand(2));
@@ -171,13 +171,13 @@ void ConvLowering::Lowering(PatternRewriter &rewriter, top::ConvOp op) const {
   // normal conv
   else if (group == 1) {
     for (auto in : op->getOperands()) {
-      if (in.getType().isa<mlir::NoneType>()){  //bias
+      if (in.getType().isa<mlir::NoneType>()) { // bias
         std::vector<float> bias(oc, 0);
         auto const_ty = RankedTensorType::get({oc}, rewriter.getF32Type());
         DenseElementsAttr attr = DenseElementsAttr::get(
-                const_ty, llvm::ArrayRef(bias.data(), bias.size()));
+            const_ty, llvm::ArrayRef(bias.data(), bias.size()));
         auto constop =
-                rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr);
+            rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr);
         operands.push_back(constop->getResult(0));
       } else {
         operands.push_back(in);
@@ -197,7 +197,8 @@ void ConvLowering::Lowering(PatternRewriter &rewriter, top::ConvOp op) const {
           op->getLoc(), out_type, conv->getResults(), clamp_attr);
       rewriter.replaceOp(op, clamp->getResults());
     } else {
-      auto conv_op = rewriter.create<mlir::tosa::Conv2DOp>(op->getLoc(), newType, operands, attrs);
+      auto conv_op = rewriter.create<mlir::tosa::Conv2DOp>(
+          op->getLoc(), newType, operands, attrs);
       rewriter.replaceOp(op, conv_op->getResults());
     }
   }
@@ -209,7 +210,8 @@ void ConvLowering::Lowering(PatternRewriter &rewriter, top::ConvOp op) const {
 //===------------------------------------------------------------===//
 // ConvPermuteLowering
 //===------------------------------------------------------------===//
-void ConvPermuteLowering::Lowering(PatternRewriter &rewriter, top::ConvPermuteOp op) const {
+void ConvPermuteLowering::Lowering(PatternRewriter &rewriter,
+                                   top::ConvPermuteOp op) const {
   assert(op->getNumResults() == 1);
   auto outType = op->getResult(0).getType();
 
@@ -227,21 +229,23 @@ void ConvPermuteLowering::Lowering(PatternRewriter &rewriter, top::ConvPermuteOp
   attrs.push_back(rewriter.getNamedAttr(
       "dilation", rewriter.getDenseI64ArrayAttr(*dilations)));
 
-  auto convShapeAttr = op->getAttr("channel_last_conv_shape").dyn_cast_or_null<ArrayAttr>();
+  auto convShapeAttr =
+      op->getAttr("channel_last_conv_shape").dyn_cast_or_null<ArrayAttr>();
   std::vector<int64_t> convShape;
   if (convShapeAttr) {
     for (auto convAttr : convShapeAttr.getValue()) {
-      convShape.push_back(convAttr.cast<IntegerAttr>().getInt()); 
+      convShape.push_back(convAttr.cast<IntegerAttr>().getInt());
     }
   }
   auto convType = RankedTensorType::get(
-    convShape, outType.cast<RankedTensorType>().getElementType()
-  );
-  auto conv_op = rewriter.create<mlir::tosa::Conv2DOp>(op->getLoc(), convType, op->getOperands(), attrs);
+      convShape, outType.cast<RankedTensorType>().getElementType());
+  auto conv_op = rewriter.create<mlir::tosa::Conv2DOp>(
+      op->getLoc(), convType, op->getOperands(), attrs);
 
   // ReshapeOp
   auto newShape = outType.cast<RankedTensorType>().getShape();
-  auto reshape_op = rewriter.create<mlir::tosa::ReshapeOp>(op->getLoc(), outType, conv_op->getResult(0), newShape);
+  auto reshape_op = rewriter.create<mlir::tosa::ReshapeOp>(
+      op->getLoc(), outType, conv_op->getResult(0), newShape);
   rewriter.replaceOp(op, reshape_op->getResults());
 }
 
@@ -253,7 +257,8 @@ void ReshapeLowering::Lowering(PatternRewriter &rewriter,
   assert(op->getNumResults() == 1);
   auto newType = op->getResult(0).getType();
   auto newShape = newType.cast<RankedTensorType>().getShape();
-  rewriter.replaceOpWithNewOp<mlir::tosa::ReshapeOp>(op, newType, op->getOperand(0), newShape);
+  rewriter.replaceOpWithNewOp<mlir::tosa::ReshapeOp>(
+      op, newType, op->getOperand(0), newShape);
 }
 
 //===------------------------------------------------------------===//
@@ -269,11 +274,11 @@ void PermuteLowering::Lowering(PatternRewriter &rewriter,
   operands.push_back(op->getOperand(0));
 
   auto order = module::getI64Array(op.getOrder());
-  std::vector<int64_t>& ord = *order;
+  std::vector<int64_t> &ord = *order;
   int ord_size = ord.size();
 
   std::vector<int64_t> perms;
-  for (int i=0; i < ord_size; i++) {
+  for (int i = 0; i < ord_size; i++) {
     perms.push_back(order->at(i));
   }
 
@@ -297,7 +302,7 @@ void ConcatLowering::Lowering(PatternRewriter &rewriter,
   auto size = outType.cast<RankedTensorType>().getShape().size();
   int32_t new_axis, axis = op.getAxis();
 
-  if (axis > 0) 
+  if (axis > 0)
     new_axis = axis;
   else
     new_axis = size + axis;
@@ -310,7 +315,8 @@ void ConcatLowering::Lowering(PatternRewriter &rewriter,
   for (auto in : op->getOperands()) {
     operands.push_back(in);
   }
-  rewriter.replaceOpWithNewOp<mlir::tosa::ConcatOp>(op, outType, operands, attrs);
+  rewriter.replaceOpWithNewOp<mlir::tosa::ConcatOp>(op, outType, operands,
+                                                    attrs);
 }
 
 //===------------------------------------------------------------===//
@@ -323,9 +329,8 @@ void ReduceMeanLowering::Lowering(PatternRewriter &rewriter,
   auto outType = op->getResult(0).getType();
   auto size = outType.cast<RankedTensorType>().getShape().size();
   int32_t new_axis, axis = op.getAxis();
-  
 
-  if (axis > 0) 
+  if (axis > 0)
     new_axis = axis;
   else
     new_axis = size + axis;
@@ -345,9 +350,9 @@ void ReduceMeanLowering::Lowering(PatternRewriter &rewriter,
   auto inType = op->getOperand(0).getType();
   std::vector<int64_t> in_shape(inType.cast<RankedTensorType>().getShape());
   std::vector<float> const_value;
-  const_value.push_back(1./in_shape[in_shape.size()-1]);
+  const_value.push_back(1. / in_shape[in_shape.size() - 1]);
   std::vector<int64_t> const_shape;
-  for (int i = 0; i < size ; i++) {
+  for (int i = 0; i < size; i++) {
     const_shape.push_back(1);
   }
   auto const_ty = RankedTensorType::get(const_shape, rewriter.getF32Type());
@@ -357,36 +362,36 @@ void ReduceMeanLowering::Lowering(PatternRewriter &rewriter,
       rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr);
 
   // MulOp
-  rewriter.replaceOpWithNewOp<mlir::tosa::MulOp>(op, outType, 
-      reducesum->getResult(0), constop->getResult(0), rewriter.getI32IntegerAttr(0));
+  rewriter.replaceOpWithNewOp<mlir::tosa::MulOp>(
+      op, outType, reducesum->getResult(0), constop->getResult(0),
+      rewriter.getI32IntegerAttr(0));
 }
 
 //===------------------------------------------------------------===//
 // SubLowering
 //===------------------------------------------------------------===//
-void SubLowering::Lowering(PatternRewriter &rewriter,
-                           top::SubOp op) const {
+void SubLowering::Lowering(PatternRewriter &rewriter, top::SubOp op) const {
   assert(op->getNumResults() == 1);
   auto newType = op->getResult(0).getType();
-  rewriter.replaceOpWithNewOp<mlir::tosa::SubOp>(op, newType, op->getOperand(0), op->getOperand(1));
+  rewriter.replaceOpWithNewOp<mlir::tosa::SubOp>(op, newType, op->getOperand(0),
+                                                 op->getOperand(1));
 }
 
 //===------------------------------------------------------------===//
 // MulLowering
 //===------------------------------------------------------------===//
-void MulLowering::Lowering(PatternRewriter &rewriter,
-                           top::MulOp op) const {
+void MulLowering::Lowering(PatternRewriter &rewriter, top::MulOp op) const {
   assert(op->getNumResults() == 1);
   auto newType = op->getResult(0).getType();
-  rewriter.replaceOpWithNewOp<mlir::tosa::MulOp>(op, newType, 
-      op->getOperand(0), op->getOperand(1), rewriter.getI32IntegerAttr(0));
+  rewriter.replaceOpWithNewOp<mlir::tosa::MulOp>(op, newType, op->getOperand(0),
+                                                 op->getOperand(1),
+                                                 rewriter.getI32IntegerAttr(0));
 }
 
 //===------------------------------------------------------------===//
 // DivLowering
 //===------------------------------------------------------------===//
-void DivLowering::Lowering(PatternRewriter &rewriter,
-                           top::DivOp op) const {
+void DivLowering::Lowering(PatternRewriter &rewriter, top::DivOp op) const {
   assert(op->getNumResults() == 1);
   auto newType = op->getResult(0).getType();
 
@@ -404,14 +409,13 @@ void DivLowering::Lowering(PatternRewriter &rewriter,
 //===------------------------------------------------------------===//
 // SqrtLowering
 //===------------------------------------------------------------===//
-void SqrtLowering::Lowering(PatternRewriter &rewriter,
-                            top::SqrtOp op) const {
+void SqrtLowering::Lowering(PatternRewriter &rewriter, top::SqrtOp op) const {
   assert(op->getNumResults() == 1);
   auto newType = op->getResult(0).getType();
 
   // RsqrtOp
-  auto rsqrt = rewriter.create<mlir::tosa::RsqrtOp>(
-      op->getLoc(), newType, op->getOperand(0));
+  auto rsqrt = rewriter.create<mlir::tosa::RsqrtOp>(op->getLoc(), newType,
+                                                    op->getOperand(0));
   // ReciprocalOp
   auto reciprocal = rewriter.create<mlir::tosa::ReciprocalOp>(
       op->getLoc(), newType, rsqrt->getResult(0));
@@ -428,7 +432,8 @@ void MatMulLowering::Lowering(PatternRewriter &rewriter,
   auto leftType = op->getOperand(0).getType();
   auto rightType = op->getOperand(1).getType();
   std::vector<int64_t> leftShape(leftType.cast<RankedTensorType>().getShape());
-  std::vector<int64_t> rightShape(rightType.cast<RankedTensorType>().getShape());
+  std::vector<int64_t> rightShape(
+      rightType.cast<RankedTensorType>().getShape());
   auto leftSize = leftType.cast<RankedTensorType>().getShape().size();
   auto rightSize = rightType.cast<RankedTensorType>().getShape().size();
 
@@ -437,16 +442,18 @@ void MatMulLowering::Lowering(PatternRewriter &rewriter,
     auto matmul = rewriter.create<mlir::tosa::MatMulOp>(
         op->getLoc(), newType, op->getOperand(0), op->getOperand(1));
     rewriter.replaceOp(op, matmul->getResults());
-  } else if (leftSize == 4 && rightSize == 4 && leftShape[0] == 1 && rightShape[0] == 1) {
+  } else if (leftSize == 4 && rightSize == 4 && leftShape[0] == 1 &&
+             rightShape[0] == 1) {
     // ReshapeOp
     std::vector<int64_t> newLeftShape(leftShape.begin() + 1, leftShape.end());
-    std::vector<int64_t> newRightShape(rightShape.begin() + 1, rightShape.end());
+    std::vector<int64_t> newRightShape(rightShape.begin() + 1,
+                                       rightShape.end());
 
     auto left_type = RankedTensorType::get(
-      newLeftShape, leftType.cast<RankedTensorType>().getElementType());
+        newLeftShape, leftType.cast<RankedTensorType>().getElementType());
 
     auto right_type = RankedTensorType::get(
-      newRightShape, rightType.cast<RankedTensorType>().getElementType());
+        newRightShape, rightType.cast<RankedTensorType>().getElementType());
 
     auto left_op = rewriter.create<mlir::tosa::ReshapeOp>(
         op->getLoc(), left_type, op->getOperand(0), newLeftShape);
@@ -454,16 +461,19 @@ void MatMulLowering::Lowering(PatternRewriter &rewriter,
         op->getLoc(), right_type, op->getOperand(1), newRightShape);
 
     // MatMulOp
-    std::vector<int64_t> matmulShape = {newLeftShape[0], newLeftShape[1], newRightShape[2]};
+    std::vector<int64_t> matmulShape = {newLeftShape[0], newLeftShape[1],
+                                        newRightShape[2]};
     auto matmul_type = RankedTensorType::get(
-      matmulShape, newType.cast<RankedTensorType>().getElementType());
+        matmulShape, newType.cast<RankedTensorType>().getElementType());
     auto matmul_op = rewriter.create<mlir::tosa::MatMulOp>(
-        op->getLoc(), matmul_type, left_op->getResult(0), right_op->getResult(0));
+        op->getLoc(), matmul_type, left_op->getResult(0),
+        right_op->getResult(0));
 
     // ReshapeOp
-    std::vector<int64_t> finalShape = {1, newLeftShape[0], newLeftShape[1], newRightShape[2]};
+    std::vector<int64_t> finalShape = {1, newLeftShape[0], newLeftShape[1],
+                                       newRightShape[2]};
     auto reshape_type = RankedTensorType::get(
-      finalShape, newType.cast<RankedTensorType>().getElementType());
+        finalShape, newType.cast<RankedTensorType>().getElementType());
     auto reshape_op = rewriter.create<mlir::tosa::ReshapeOp>(
         op->getLoc(), reshape_type, matmul_op->getResult(0), finalShape);
     rewriter.replaceOp(op, reshape_op->getResults());
@@ -481,10 +491,12 @@ void MulConstLowering::Lowering(PatternRewriter &rewriter,
   auto inType = op->getOperand(0).getType();
   auto size = inType.cast<RankedTensorType>().getShape().size();
   std::vector<float> const_value;
-  const_value.push_back(op->getAttr("const_val").dyn_cast_or_null<FloatAttr>().getValueAsDouble());
+  const_value.push_back(op->getAttr("const_val")
+                            .dyn_cast_or_null<FloatAttr>()
+                            .getValueAsDouble());
 
   std::vector<int64_t> const_shape;
-  for (int i = 0; i < size ; i++) {
+  for (int i = 0; i < size; i++) {
     const_shape.push_back(1);
   }
   auto const_ty = RankedTensorType::get(const_shape, rewriter.getF32Type());
@@ -494,22 +506,22 @@ void MulConstLowering::Lowering(PatternRewriter &rewriter,
       rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr);
 
   // MulOp
-  rewriter.replaceOpWithNewOp<mlir::tosa::MulOp>(op, inType, 
-      op->getOperand(0), constop->getResult(0), rewriter.getI32IntegerAttr(0));
+  rewriter.replaceOpWithNewOp<mlir::tosa::MulOp>(op, inType, op->getOperand(0),
+                                                 constop->getResult(0),
+                                                 rewriter.getI32IntegerAttr(0));
 }
 
 //===------------------------------------------------------------===//
 // GELULowering
 //===------------------------------------------------------------===//
-void GELULowering::Lowering(PatternRewriter &rewriter,
-                            top::GELUOp op) const {
+void GELULowering::Lowering(PatternRewriter &rewriter, top::GELUOp op) const {
   assert(op->getNumResults() == 1);
 
-  // ConstOp 
+  // ConstOp
   auto inType = op->getOperand(0).getType();
   auto size = inType.cast<RankedTensorType>().getShape().size();
   std::vector<int64_t> const_shape;
-  for (int i = 0; i < size ; i++) {
+  for (int i = 0; i < size; i++) {
     const_shape.push_back(1);
   }
   auto const_ty = RankedTensorType::get(const_shape, rewriter.getF32Type());
@@ -534,7 +546,6 @@ void GELULowering::Lowering(PatternRewriter &rewriter,
       const_ty, llvm::ArrayRef(const_value_2.data(), const_value_2.size()));
   auto constop_2 =
       rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr2);
-
 
   // ConstOp const_value_3 = 3
   std::vector<float> const_value_3 = {0.044715};
@@ -565,11 +576,12 @@ void GELULowering::Lowering(PatternRewriter &rewriter,
 
   // MulOp
   auto mul_add_const2_op = rewriter.create<mlir::tosa::MulOp>(
-      op->getLoc(), inType, add_op_mul_op->getResult(0), constop_2->getResult(0),
-      rewriter.getI32IntegerAttr(0));
+      op->getLoc(), inType, add_op_mul_op->getResult(0),
+      constop_2->getResult(0), rewriter.getI32IntegerAttr(0));
 
   // TanhOp
-  auto tanh_op = rewriter.create<mlir::tosa::TanhOp>(op->getLoc(), inType, mul_add_const2_op->getResult(0));
+  auto tanh_op = rewriter.create<mlir::tosa::TanhOp>(
+      op->getLoc(), inType, mul_add_const2_op->getResult(0));
 
   // AddOp
   auto add_tanh_const1_op = rewriter.create<mlir::tosa::AddOp>(
@@ -582,8 +594,8 @@ void GELULowering::Lowering(PatternRewriter &rewriter,
 
   // MulOp
   auto mul_const0_op = rewriter.create<mlir::tosa::MulOp>(
-      op->getLoc(), inType, constop_0->getResult(0), mul_op_tanh_op->getResult(0),
-      rewriter.getI32IntegerAttr(0));
+      op->getLoc(), inType, constop_0->getResult(0),
+      mul_op_tanh_op->getResult(0), rewriter.getI32IntegerAttr(0));
 
   rewriter.replaceOp(op, mul_const0_op->getResults());
 }
@@ -591,8 +603,7 @@ void GELULowering::Lowering(PatternRewriter &rewriter,
 //===------------------------------------------------------------===//
 // SliceLowering
 //===------------------------------------------------------------===//
-void SliceLowering::Lowering(PatternRewriter &rewriter,
-                             top::SliceOp op) const {
+void SliceLowering::Lowering(PatternRewriter &rewriter, top::SliceOp op) const {
   assert(op->getNumResults() == 1);
   auto inType = op->getOperand(0).getType();
 
@@ -601,7 +612,7 @@ void SliceLowering::Lowering(PatternRewriter &rewriter,
   std::vector<int64_t> starts;
   if (startListAttr) {
     for (auto startAttr : startListAttr.getValue()) {
-      starts.push_back(startAttr.cast<IntegerAttr>().getInt()); 
+      starts.push_back(startAttr.cast<IntegerAttr>().getInt());
     }
   }
 
@@ -610,10 +621,10 @@ void SliceLowering::Lowering(PatternRewriter &rewriter,
   std::vector<int64_t> sizes;
   if (sizeListAttr) {
     for (auto sizeAttr : sizeListAttr.getValue()) {
-      sizes.push_back(sizeAttr.cast<IntegerAttr>().getInt()); 
+      sizes.push_back(sizeAttr.cast<IntegerAttr>().getInt());
     }
   }
-  
+
   // SliceOp
   std::vector<int64_t> outShape = {sizes.begin(), sizes.end()};
   auto outType = RankedTensorType::get(
@@ -624,7 +635,8 @@ void SliceLowering::Lowering(PatternRewriter &rewriter,
       rewriter.getNamedAttr("start", rewriter.getDenseI64ArrayAttr(starts)));
   attrs.push_back(
       rewriter.getNamedAttr("size", rewriter.getDenseI64ArrayAttr(sizes)));
-  rewriter.replaceOpWithNewOp<mlir::tosa::SliceOp>(op, outType, op->getOperand(0), attrs);
+  rewriter.replaceOpWithNewOp<mlir::tosa::SliceOp>(op, outType,
+                                                   op->getOperand(0), attrs);
 }
 
 //===------------------------------------------------------------===//
@@ -709,9 +721,8 @@ void LayerNormLowering::Lowering(PatternRewriter &rewriter,
   auto outType = op->getResult(0).getType();
   auto size = outType.cast<RankedTensorType>().getShape().size();
   int32_t new_axis, axis = op.getAxis();
-  
 
-  if (axis > 0) 
+  if (axis > 0)
     new_axis = axis;
   else
     new_axis = size + axis;
@@ -731,9 +742,9 @@ void LayerNormLowering::Lowering(PatternRewriter &rewriter,
   auto inType = op->getOperand(0).getType();
   std::vector<int64_t> in_shape(inType.cast<RankedTensorType>().getShape());
   std::vector<float> const_value;
-  const_value.push_back(1./in_shape[new_axis]);
+  const_value.push_back(1. / in_shape[new_axis]);
   std::vector<int64_t> const_shape;
-  for (int i = 0; i < size ; i++) {
+  for (int i = 0; i < size; i++) {
     const_shape.push_back(1);
   }
   auto const_ty = RankedTensorType::get(const_shape, rewriter.getF32Type());
@@ -743,28 +754,31 @@ void LayerNormLowering::Lowering(PatternRewriter &rewriter,
       rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr);
 
   // MulOp
-  auto mul_op_0 = rewriter.create<mlir::tosa::MulOp>(op->getLoc(), outType, 
-      reducesum->getResult(0), constop->getResult(0), rewriter.getI32IntegerAttr(0));
+  auto mul_op_0 = rewriter.create<mlir::tosa::MulOp>(
+      op->getLoc(), outType, reducesum->getResult(0), constop->getResult(0),
+      rewriter.getI32IntegerAttr(0));
 
   // SubOp
-  auto sub_op = rewriter.create<mlir::tosa::SubOp>(op->getLoc(), outType, 
-      op->getOperand(0), mul_op_0->getResult(0));
+  auto sub_op = rewriter.create<mlir::tosa::SubOp>(
+      op->getLoc(), outType, op->getOperand(0), mul_op_0->getResult(0));
 
   // RsqrtOp
-  auto rsqrt = rewriter.create<mlir::tosa::RsqrtOp>(
-      op->getLoc(), outType, op->getOperand(0));
+  auto rsqrt = rewriter.create<mlir::tosa::RsqrtOp>(op->getLoc(), outType,
+                                                    op->getOperand(0));
 
   // MulOp
-  auto mul_op_1 = rewriter.create<mlir::tosa::MulOp>(op->getLoc(), outType, 
-      rsqrt->getResult(0), op->getOperand(1), rewriter.getI32IntegerAttr(0));
+  auto mul_op_1 = rewriter.create<mlir::tosa::MulOp>(
+      op->getLoc(), outType, rsqrt->getResult(0), op->getOperand(1),
+      rewriter.getI32IntegerAttr(0));
 
   // MulOp
-  auto mul_op_2 = rewriter.create<mlir::tosa::MulOp>(op->getLoc(), outType, 
-      mul_op_1->getResult(0), sub_op->getResult(0), rewriter.getI32IntegerAttr(0));
+  auto mul_op_2 = rewriter.create<mlir::tosa::MulOp>(
+      op->getLoc(), outType, mul_op_1->getResult(0), sub_op->getResult(0),
+      rewriter.getI32IntegerAttr(0));
 
   // AddOp
-  auto add_op = rewriter.create<mlir::tosa::AddOp>(op->getLoc(), outType, 
-      mul_op_2->getResult(0), op->getOperand(2));
+  auto add_op = rewriter.create<mlir::tosa::AddOp>(
+      op->getLoc(), outType, mul_op_2->getResult(0), op->getOperand(2));
 
   // Output
   rewriter.replaceOp(op, add_op->getResults());

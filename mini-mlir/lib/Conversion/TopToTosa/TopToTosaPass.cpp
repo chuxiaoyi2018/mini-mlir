@@ -1,11 +1,11 @@
-#include <iostream>
-#include <fstream>
-#include <vector>
-#include <sstream>
+#include "mini_mlir/Conversion/Conversion.h"
 #include "mini_mlir/Conversion/TopToTosa/OpLowering.h"
 #include "mini_mlir/Conversion/TopToTosa/OpLoweringINT8.h"
-#include "mini_mlir/Conversion/Conversion.h"
 #include "mini_mlir/Support/Module.h"
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <vector>
 
 namespace mlir {
 #define GEN_PASS_DEF_CONVERTTOPTOTOSA
@@ -32,8 +32,9 @@ public:
     if (has_weight) {
       auto valptr = op.read_as_float();
       auto new_val = change_weight(valptr, op->getResult(0).getType());
-      auto attr = DenseElementsAttr::get(
-          outType.cast<RankedTensorType>(), llvm::ArrayRef(new_val, valptr->size()));
+      auto attr =
+          DenseElementsAttr::get(outType.cast<RankedTensorType>(),
+                                 llvm::ArrayRef(new_val, valptr->size()));
       rewriter.replaceOpWithNewOp<mlir::tosa::ConstOp>(op, outType, attr);
     } else {
       auto attr = DenseElementsAttr::get(
@@ -79,13 +80,12 @@ public:
       std::getline(linestream, fmin, ',');
       std::getline(linestream, fmax, ',');
 
-      threshold_map[name] = atof(threshold.c_str()); 
+      threshold_map[name] = atof(threshold.c_str());
       fmin_map[name] = atof(fmin.c_str());
-      fmax_map[name] = atof(fmax.c_str()); 
+      fmax_map[name] = atof(fmax.c_str());
     }
 
     infile.close();
-    
 
     std::map<std::string, std::vector<float>> threshold_map_with_parent;
     std::map<std::string, std::vector<float>> fmin_map_with_parent;
@@ -94,20 +94,28 @@ public:
     auto mainFunc = module::getMainFuncOp();
     mainFunc.walk([&](Operation *op) {
       if (!isa<top::NoneOp, top::InputOp, ReturnOp, FuncOp>(op)) {
-        std::vector<float> threshold_vec {0.,0.,0.,0.};
-        std::vector<float> fmin_vec {0.,0.,0.,0.};
-        std::vector<float> fmax_vec {0.,0.,0.,0.};
+        std::vector<float> threshold_vec{0., 0., 0., 0.};
+        std::vector<float> fmin_vec{0., 0., 0., 0.};
+        std::vector<float> fmax_vec{0., 0., 0., 0.};
         int operand_num = static_cast<int>(op->getNumOperands());
         for (int i = 0; i < 2 && operand_num > 0; i++, operand_num--) {
-          std::string operand_name = op->getOperand(i).getDefiningOp()->getAttr("name").cast<StringAttr>().getValue().str();
+          std::string operand_name = op->getOperand(i)
+                                         .getDefiningOp()
+                                         ->getAttr("name")
+                                         .cast<StringAttr>()
+                                         .getValue()
+                                         .str();
           if (threshold_map.find(operand_name) != threshold_map.end()) {
             threshold_vec[i] = threshold_map.at(operand_name);
             fmin_vec[i] = fmin_map.at(operand_name);
             fmax_vec[i] = fmax_map.at(operand_name);
           }
         }
-        std::string node_name = op->getAttr("name").cast<StringAttr>().getValue().str();
-        if (threshold_map.find(node_name) != threshold_map.end() && threshold_vec[0] != 0 && threshold_vec[0] < 20 && threshold_vec[3] < 20) {
+        std::string node_name =
+            op->getAttr("name").cast<StringAttr>().getValue().str();
+        if (threshold_map.find(node_name) != threshold_map.end() &&
+            threshold_vec[0] != 0 && threshold_vec[0] < 20 &&
+            threshold_vec[3] < 20) {
           threshold_vec[threshold_vec.size() - 1] = threshold_map.at(node_name);
           fmin_vec[threshold_vec.size() - 1] = fmin_map.at(node_name);
           fmax_vec[threshold_vec.size() - 1] = fmax_map.at(node_name);
@@ -119,14 +127,15 @@ public:
       }
     });
 
-
     auto config = GreedyRewriteConfig();
     config.maxIterations = 1;
 
     // Match Order: int8 -> fp32 -> weight
     // Lowering to INT8
     if (weightType == "INT8") {
-      populateTopToTosaConversionINT8Patterns(&patterns, threshold_map_with_parent, fmin_map_with_parent, fmax_map_with_parent);
+      populateTopToTosaConversionINT8Patterns(
+          &patterns, threshold_map_with_parent, fmin_map_with_parent,
+          fmax_map_with_parent);
       applyPatternsAndFoldGreedily(module_, std::move(patterns), config);
       patterns.clear();
     }
