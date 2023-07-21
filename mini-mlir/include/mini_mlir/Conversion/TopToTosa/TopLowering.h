@@ -6,6 +6,7 @@
 #include "mini_mlir/Support/Module.h"
 
 
+
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/IR/Location.h"
 #include "mlir/IR/PatternMatch.h"
@@ -106,66 +107,9 @@ static std::vector<NamedAttribute> gen_clamp_attr(PatternRewriter &rewriter,
   return clamp_attr;
 }
 
-
-static mlir::tosa::CastOp lowering_quantize(PatternRewriter &rewriter, mlir::Value in_value, mlir::Type inType, 
-                                mlir::Type eleType, mlir::Location loc, float threshold) {
-  // ConstOp inv_scale
-  std::vector<int64_t> in_shape(inType.cast<RankedTensorType>().getShape());
-  int in_size = in_shape.size();
-  std::vector<float> inv_scale;
-  inv_scale.push_back(127./threshold);
-  std::vector<int64_t> const_shape;
-  for (int i = 0; i < in_size ; i++) {
-    const_shape.push_back(1);
-  }
-  auto const_ty = RankedTensorType::get({const_shape}, rewriter.getF32Type());
-  DenseElementsAttr attr = DenseElementsAttr::get(
-      const_ty, llvm::ArrayRef(inv_scale.data(), inv_scale.size()));
-  auto const_inv_scale =
-      rewriter.create<mlir::tosa::ConstOp>(loc, const_ty, attr);
-
-  // MulOp for int8
-  auto mul_inv_scale_op = rewriter.create<mlir::tosa::MulOp>(loc, inType,
-      in_value, const_inv_scale->getResult(0), rewriter.getI32IntegerAttr(0));
-
-  // CastOp fp32->int8/int32
-  auto cast2int_ty = RankedTensorType::get({in_shape}, eleType);
-  auto cast2int_op =
-      rewriter.create<mlir::tosa::CastOp>(loc, cast2int_ty, mul_inv_scale_op->getResult(0));
-  return cast2int_op;
-}
-
-static mlir::tosa::MulOp lowering_dequantize(PatternRewriter &rewriter, mlir::Value in_value, mlir::Type outType, 
-                              mlir::Location loc, float scale_value) {
-  std::vector<int64_t> out_shape(outType.cast<RankedTensorType>().getShape());
-  
-  // CastOp int->fp32
-  auto cast2fp32_ty = RankedTensorType::get({out_shape}, rewriter.getF32Type());
-  auto cast2fp32_op =
-      rewriter.create<mlir::tosa::CastOp>(loc, cast2fp32_ty, in_value);
-  
-  // ConstOp scale
-  int out_size = out_shape.size();
-  std::vector<float> scale;
-  scale.push_back(scale_value);
-  std::vector<int64_t> const_shape;
-  for (int i = 0; i < out_size ; i++) {
-    const_shape.push_back(1);
-  }
-  auto const_ty = RankedTensorType::get({const_shape}, rewriter.getF32Type());
-  DenseElementsAttr attr = DenseElementsAttr::get(
-      const_ty, llvm::ArrayRef(scale.data(), scale.size()));
-  auto const_scale =
-      rewriter.create<mlir::tosa::ConstOp>(loc, const_ty, attr);
-
-  // MulOp for fp32
-  auto mul_scale_op = rewriter.create<mlir::tosa::MulOp>(loc, outType, 
-      cast2fp32_op->getResult(0), const_scale->getResult(0), rewriter.getI32IntegerAttr(0));
-  return mul_scale_op;
-}
-
-
-// weight lowering to INT8
+//===------------------------------------------------------------===//
+// GetWeightThreshold
+//===------------------------------------------------------------===//
 static float get_weight_threshold(PatternRewriter &rewriter, top::WeightOp weight_op) {
   auto valptr = weight_op.read_as_float();
   std::vector<float> data = *valptr.get();
@@ -176,6 +120,9 @@ static float get_weight_threshold(PatternRewriter &rewriter, top::WeightOp weigh
   return threshold;
 }
 
+//===------------------------------------------------------------===//
+// WeightQuantize
+//===------------------------------------------------------------===//
 static mlir::tosa::ConstOp lowering_weight_int8(PatternRewriter &rewriter, top::WeightOp weight_op, 
         mlir::Type castType, Location loc, float threshold, std::vector<int64_t> in_shape) {
   auto valptr = weight_op.read_as_float();
@@ -221,25 +168,172 @@ static mlir::tosa::ConstOp lowering_weight_int32(PatternRewriter &rewriter, top:
   return const_op;
 }
 
+//===------------------------------------------------------------===//
+// LookupTable
+//===------------------------------------------------------------===//
 template <typename Func>
-static DenseElementsAttr create_lookup_table(PatternRewriter &rewriter, 
-                  Location loc, float threshold, Func func) {
+static tosa::ConstOp create_lookup_table(PatternRewriter &rewriter, 
+                  Location loc, float in_threshold, float out_scale, float out_zp, Func func) {
   int64_t min_th = 0;
   int64_t max_th = 255;
 
-  float scale = threshold / static_cast<float>(max_th - min_th);
-  float inv_scale = 1. / scale;
-
   std::vector<int8_t> table;
+
+  // min -> min_func_value
+  // max -> max_func_value
   for (auto i = min_th; i <= max_th; i++) {
-    int8_t data = static_cast<int8_t>(func(i * scale) * inv_scale);
+    float step = func(i * in_threshold/127. - in_threshold);
+    float tmp = std::clamp(floor(step / out_scale + out_zp), -128., 127.);
+    int8_t data = static_cast<int8_t>(tmp);
     table.push_back(data);
   }
 
-  auto table_type = RankedTensorType::get(
-      {256}, rewriter.getI8Type());
+  auto const_type = RankedTensorType::get({256}, rewriter.getI8Type());
+  DenseElementsAttr const_attr = DenseElementsAttr::get(const_type, llvm::ArrayRef(table));
+  return rewriter.create<tosa::ConstOp>(loc, const_type, const_attr);
+}
+
+
+//===------------------------------------------------------------===//
+// CreateConstOp
+//===------------------------------------------------------------===//
+static mlir::tosa::ConstOp create_const_op(PatternRewriter &rewriter, mlir::Type inType, 
+                    mlir::Location loc, std::vector<int8_t> const_vec) {
+  std::vector<int64_t> in_shape(inType.cast<RankedTensorType>().getShape());
+  int in_size = in_shape.size();
+  std::vector<int64_t> const_shape;
+  for (int i = 0; i < in_size ; i++) {
+    const_shape.push_back(1);
+  }
+  auto const_ty = RankedTensorType::get({const_shape}, rewriter.getI8Type());
+  DenseElementsAttr attr = DenseElementsAttr::get(const_ty, llvm::ArrayRef(const_vec));
+  return rewriter.create<mlir::tosa::ConstOp>(loc, const_ty, attr);
+}
+
+static mlir::tosa::ConstOp create_const_op(PatternRewriter &rewriter, mlir::Type inType, 
+                    mlir::Location loc, std::vector<float> const_vec) {
+  std::vector<int64_t> in_shape(inType.cast<RankedTensorType>().getShape());
+  int in_size = in_shape.size();
+  std::vector<int64_t> const_shape;
+  for (int i = 0; i < in_size ; i++) {
+    const_shape.push_back(1);
+  }
+  auto const_ty = RankedTensorType::get({const_shape}, rewriter.getF32Type());
+  DenseElementsAttr attr = DenseElementsAttr::get(const_ty, llvm::ArrayRef(const_vec));
+  return rewriter.create<mlir::tosa::ConstOp>(loc, const_ty, attr);
+}
+
+//===------------------------------------------------------------===//
+// Quantize
+//===------------------------------------------------------------===//
+static mlir::tosa::CastOp lowering_quantize(PatternRewriter &rewriter, mlir::Value in_value, mlir::Type inType, 
+                                mlir::Type eleType, mlir::Location loc, float inv_scale_value) {
+  // ConstOp inv_scale
+  std::vector<int64_t> in_shape(inType.cast<RankedTensorType>().getShape());
+  int in_size = in_shape.size();
+  std::vector<float> inv_scale;
+  inv_scale.push_back(inv_scale_value);
+  std::vector<int64_t> const_shape;
+  for (int i = 0; i < in_size ; i++) {
+    const_shape.push_back(1);
+  }
+  auto const_ty = RankedTensorType::get({const_shape}, rewriter.getF32Type());
   DenseElementsAttr attr = DenseElementsAttr::get(
-      table_type, llvm::ArrayRef(table.data(), table.size()));
-  return attr;
+      const_ty, llvm::ArrayRef(inv_scale.data(), inv_scale.size()));
+  auto const_inv_scale =
+      rewriter.create<mlir::tosa::ConstOp>(loc, const_ty, attr);
+
+  // MulOp for int8
+  auto mul_inv_scale_op = rewriter.create<mlir::tosa::MulOp>(loc, inType,
+      in_value, const_inv_scale->getResult(0), rewriter.getI32IntegerAttr(0));
+
+  // CastOp fp32->int8/int32
+  auto cast2int_ty = RankedTensorType::get({in_shape}, eleType);
+  auto cast2int_op =
+      rewriter.create<mlir::tosa::CastOp>(loc, cast2int_ty, mul_inv_scale_op->getResult(0));
+  return cast2int_op;
+}
+
+static mlir::tosa::CastOp lowering_quantize(PatternRewriter &rewriter, mlir::Value in_value, mlir::Type inType, 
+                                mlir::Type eleType, mlir::Location loc, float fmin, float fmax, float qmax, float qmin) {
+  // calc scale/zp
+  float inv_scale = (qmax - qmin) / (fmax - fmin);
+  float inv_zp = -fmin * inv_scale + qmin;
+
+  // MulOp
+  std::vector<float> const_inv_scale_vec{inv_scale};
+  auto const_inv_scale_op = create_const_op(rewriter, inType, loc, const_inv_scale_vec);
+  auto mul_inv_scale_op = rewriter.create<mlir::tosa::MulOp>(loc, inType,
+      in_value, const_inv_scale_op->getResult(0), rewriter.getI32IntegerAttr(0));
+
+  // AddOp
+  std::vector<float> const_inv_zp_vec{inv_zp};
+  auto const_inv_zp_op = create_const_op(rewriter, inType, loc, const_inv_zp_vec);
+  auto add_inv_zp_op = rewriter.create<mlir::tosa::AddOp>(loc, inType,
+      mul_inv_scale_op->getResult(0), const_inv_zp_op->getResult(0));
+
+  // CastOp fp32->int8/int32
+  std::vector<int64_t> in_shape(inType.cast<RankedTensorType>().getShape());
+  auto cast2int_ty = RankedTensorType::get({in_shape}, eleType);
+  auto cast2int_op =
+      rewriter.create<mlir::tosa::CastOp>(loc, cast2int_ty, add_inv_zp_op->getResult(0));
+  return cast2int_op;
+}
+
+//===------------------------------------------------------------===//
+// Dequantize
+//===------------------------------------------------------------===//
+static mlir::tosa::MulOp lowering_dequantize(PatternRewriter &rewriter, mlir::Value in_value, mlir::Type outType, 
+                              mlir::Location loc, float scale_value) {
+  std::vector<int64_t> out_shape(outType.cast<RankedTensorType>().getShape());
+  
+  // CastOp int->fp32
+  auto cast2fp32_ty = RankedTensorType::get({out_shape}, rewriter.getF32Type());
+  auto cast2fp32_op =
+      rewriter.create<mlir::tosa::CastOp>(loc, cast2fp32_ty, in_value);
+  
+  // ConstOp scale
+  int out_size = out_shape.size();
+  std::vector<float> scale;
+  scale.push_back(scale_value);
+  std::vector<int64_t> const_shape;
+  for (int i = 0; i < out_size ; i++) {
+    const_shape.push_back(1);
+  }
+  auto const_ty = RankedTensorType::get({const_shape}, rewriter.getF32Type());
+  DenseElementsAttr attr = DenseElementsAttr::get(
+      const_ty, llvm::ArrayRef(scale.data(), scale.size()));
+  auto const_scale =
+      rewriter.create<mlir::tosa::ConstOp>(loc, const_ty, attr);
+
+  // MulOp for fp32
+  auto mul_scale_op = rewriter.create<mlir::tosa::MulOp>(loc, outType, 
+      cast2fp32_op->getResult(0), const_scale->getResult(0), rewriter.getI32IntegerAttr(0));
+  return mul_scale_op;
+}
+
+static mlir::tosa::MulOp lowering_dequantize(PatternRewriter &rewriter, mlir::Value in_value, mlir::Type outType, 
+                              mlir::Location loc, float scale_value, float shift) {
+  std::vector<int64_t> out_shape(outType.cast<RankedTensorType>().getShape());
+  
+  // CastOp int->fp32
+  auto cast2fp32_ty = RankedTensorType::get({out_shape}, rewriter.getF32Type());
+  auto cast2fp32_op =
+      rewriter.create<mlir::tosa::CastOp>(loc, cast2fp32_ty, in_value);
+
+  // ConstOp & AddOp
+  std::vector<float> const_vec_for_add{shift};
+  auto const_op_for_add = create_const_op(rewriter, cast2fp32_ty, loc, const_vec_for_add);
+  auto add_op =
+      rewriter.create<mlir::tosa::AddOp>(loc, cast2fp32_ty, cast2fp32_op->getResult(0), const_op_for_add->getResult(0));
+
+  // ConstOp scale
+  std::vector<float> const_vec_for_scale{scale_value};
+  auto const_op_for_scale = create_const_op(rewriter, cast2fp32_ty, loc, const_vec_for_scale);
+
+  // MulOp for fp32
+  auto mul_scale_op = rewriter.create<mlir::tosa::MulOp>(loc, outType, 
+      add_op->getResult(0), const_op_for_scale->getResult(0), rewriter.getI32IntegerAttr(0));
+  return mul_scale_op;
 }
 } // namespace mini_mlir

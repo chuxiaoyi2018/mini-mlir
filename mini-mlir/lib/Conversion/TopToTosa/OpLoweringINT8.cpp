@@ -2,7 +2,8 @@
 
 namespace mini_mlir {
 
-void populateTopToTosaConversionINT8Patterns(RewritePatternSet *patterns, std::map<std::string, std::vector<float>> calibration_map) {
+void populateTopToTosaConversionINT8Patterns(RewritePatternSet *patterns, std::map<std::string, std::vector<float>> threshold_map, 
+                      std::map<std::string, std::vector<float>> fmin_map, std::map<std::string, std::vector<float>> fmax_map) {
   patterns->add<
       // clang-format off
       ReshapeLoweringINT8,
@@ -12,7 +13,7 @@ void populateTopToTosaConversionINT8Patterns(RewritePatternSet *patterns, std::m
       PermuteLoweringINT8,
       GELULoweringINT8
       // clang-format on
-      >(patterns->getContext(), calibration_map);
+      >(patterns->getContext(), threshold_map, fmin_map, fmax_map);
 }
 
 //===------------------------------------------------------------===//
@@ -21,7 +22,8 @@ void populateTopToTosaConversionINT8Patterns(RewritePatternSet *patterns, std::m
 void ReshapeLoweringINT8::Lowering(PatternRewriter &rewriter, top::ReshapeOp op) const {
   assert(op->getNumResults() == 1);
   std::string out_name = op->getAttr("name").cast<StringAttr>().getValue().str();
-  auto threshold = calibration_map.at(out_name)[0];
+  auto threshold = threshold_map.at(out_name)[0];
+  float inv_scale_value = 127./threshold;
 
   Location loc = op->getLoc();
   auto inType = op->getOperand(0).getType();
@@ -29,7 +31,7 @@ void ReshapeLoweringINT8::Lowering(PatternRewriter &rewriter, top::ReshapeOp op)
   std::vector<int64_t> out_shape(outType.cast<RankedTensorType>().getShape());
   
   // quantize
-  auto cast2int8_op =  lowering_quantize(rewriter, op->getOperand(0), inType, rewriter.getI8Type(), loc, threshold);
+  auto cast2int8_op =  lowering_quantize(rewriter, op->getOperand(0), inType, rewriter.getI8Type(), loc, inv_scale_value);
 
   // ReshapeOp
   auto actionType = RankedTensorType::get({out_shape}, rewriter.getI8Type());
@@ -50,7 +52,8 @@ void ReshapeLoweringINT8::Lowering(PatternRewriter &rewriter, top::ReshapeOp op)
 void PermuteLoweringINT8::Lowering(PatternRewriter &rewriter, top::PermuteOp op) const {
   assert(op->getNumResults() == 1);
   std::string out_name = op->getAttr("name").cast<StringAttr>().getValue().str();
-  auto threshold = calibration_map.at(out_name)[0];
+  auto threshold = threshold_map.at(out_name)[0];
+  float inv_scale_value = 127./threshold;
 
   Location loc = op->getLoc();
   auto inType = op->getOperand(0).getType();
@@ -72,7 +75,7 @@ void PermuteLoweringINT8::Lowering(PatternRewriter &rewriter, top::PermuteOp op)
       rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr);
   
   // quantize
-  auto cast2int8_op =  lowering_quantize(rewriter, op->getOperand(0), inType, rewriter.getI8Type(), loc, threshold);
+  auto cast2int8_op =  lowering_quantize(rewriter, op->getOperand(0), inType, rewriter.getI8Type(), loc, inv_scale_value);
 
   // ReshapeOp
   auto actionType = RankedTensorType::get({out_shape}, rewriter.getI8Type());
@@ -99,8 +102,9 @@ void AddLoweringINT8::Lowering(PatternRewriter &rewriter, top::AddOp op) const {
   std::vector<int64_t> out_shape(outType.cast<RankedTensorType>().getShape());
 
   std::string out_name = op->getAttr("name").cast<StringAttr>().getValue().str();
-  if (calibration_map.find(out_name) == calibration_map.end()) {return;}
-  const float left_threshold = calibration_map.at(out_name)[0];
+  if (threshold_map.find(out_name) == threshold_map.end()) {return;}
+  const float left_threshold = threshold_map.at(out_name)[0];
+  float inv_scale_value = 127./left_threshold;
 
   // right == top::WeightOp
   mlir::Value right_value = op->getOperand(1);
@@ -110,7 +114,7 @@ void AddLoweringINT8::Lowering(PatternRewriter &rewriter, top::AddOp op) const {
   } else if (right_op_name == "top.Weight") {
     auto weight_op = dyn_cast<top::WeightOp>(right_value.getDefiningOp());
     // quantize left op
-    auto cast2int32_op =  lowering_quantize(rewriter, op->getOperand(0), inType, rewriter.getI32Type(), loc, left_threshold);
+    auto cast2int32_op =  lowering_quantize(rewriter, op->getOperand(0), inType, rewriter.getI32Type(), loc, inv_scale_value);
     
     // quantize weight op
     std::vector<int64_t> in_shape(op->getOperand(1).getType().cast<RankedTensorType>().getShape());
@@ -129,11 +133,11 @@ void AddLoweringINT8::Lowering(PatternRewriter &rewriter, top::AddOp op) const {
     rewriter.replaceOp(op, mul_scale_op->getResults());
   } else {
     // quantize left op
-    auto cast2int32_op =  lowering_quantize(rewriter, op->getOperand(0), inType, rewriter.getI32Type(), loc, left_threshold);
+    auto cast2int32_op =  lowering_quantize(rewriter, op->getOperand(0), inType, rewriter.getI32Type(), loc, inv_scale_value);
 
     // quantize right op
     // use left_threshold
-    auto right_op =  lowering_quantize(rewriter, op->getOperand(1), inType, rewriter.getI32Type(), loc, left_threshold);
+    auto right_op =  lowering_quantize(rewriter, op->getOperand(1), inType, rewriter.getI32Type(), loc, inv_scale_value);
 
     // AddOp
     auto actionType = RankedTensorType::get({out_shape}, rewriter.getI32Type());
@@ -166,7 +170,7 @@ void MatMulLoweringINT8::Lowering(PatternRewriter &rewriter, top::MatMulOp op) c
   auto rightSize = rightType.cast<RankedTensorType>().getShape().size();
 
   std::string out_name = op->getAttr("name").cast<StringAttr>().getValue().str();
-  if (calibration_map.find(out_name) == calibration_map.end()) {return;}
+  if (threshold_map.find(out_name) == threshold_map.end()) {return;}
   
   mlir::tosa::ConstOp weight_op;
   mlir::Value right_value = op->getOperand(1);
@@ -174,8 +178,9 @@ void MatMulLoweringINT8::Lowering(PatternRewriter &rewriter, top::MatMulOp op) c
   float right_threshold;
 
   // quantize left op
-  const float left_threshold = calibration_map.at(out_name)[0];
-  mlir::tosa::CastOp left_op =  lowering_quantize(rewriter, op->getOperand(0), leftType, rewriter.getI8Type(), loc, left_threshold);
+  const float left_threshold = threshold_map.at(out_name)[0];
+  float inv_scale_value = 127./left_threshold;
+  mlir::tosa::CastOp left_op =  lowering_quantize(rewriter, op->getOperand(0), leftType, rewriter.getI8Type(), loc, inv_scale_value);
 
   // MatMulOp
   if (right_op_name == "tosa.const") {
@@ -197,8 +202,9 @@ void MatMulLoweringINT8::Lowering(PatternRewriter &rewriter, top::MatMulOp op) c
     rewriter.replaceOp(op, mul_scale_op->getResults());
   } else if (leftSize == 4 && rightSize == 4 && leftShape[0] == 1 && rightShape[0] == 1 && right_op_name != "top.Weight") {
     // quantize right op
-    right_threshold = calibration_map.at(out_name)[1];
-    auto right_op =  lowering_quantize(rewriter, op->getOperand(1), rightType, rewriter.getI8Type(), loc, right_threshold);
+    right_threshold = threshold_map.at(out_name)[1];
+    float inv_scale_value = 127./right_threshold;
+    auto right_op =  lowering_quantize(rewriter, op->getOperand(1), rightType, rewriter.getI8Type(), loc, inv_scale_value);
 
     // ReshapeOp
     std::vector<int64_t> newLeftShape(leftShape.begin() + 1, leftShape.end());
@@ -238,13 +244,14 @@ void MulLoweringINT8::Lowering(PatternRewriter &rewriter, top::MulOp op) const {
   std::vector<int64_t> outShape(outType.cast<RankedTensorType>().getShape());
 
   std::string out_name = op->getAttr("name").cast<StringAttr>().getValue().str();
-  if (calibration_map.find(out_name) == calibration_map.end()) {return;}
+  if (threshold_map.find(out_name) == threshold_map.end()) {return;}
   
   std::string right_op_name = op->getOperand(1).getDefiningOp()->getName().getStringRef().str();
 
   // quantize left op
-  const float left_threshold = calibration_map.at(out_name)[0];
-  mlir::tosa::CastOp left_op =  lowering_quantize(rewriter, op->getOperand(0), leftType, rewriter.getI8Type(), loc, left_threshold);
+  const float left_threshold = threshold_map.at(out_name)[0];
+  float inv_scale_value = 127./left_threshold;
+  mlir::tosa::CastOp left_op =  lowering_quantize(rewriter, op->getOperand(0), leftType, rewriter.getI8Type(), loc, inv_scale_value);
 
   // MulOp
   if (right_op_name == "tosa.const") {
@@ -267,8 +274,9 @@ void MulLoweringINT8::Lowering(PatternRewriter &rewriter, top::MulOp op) const {
     rewriter.replaceOp(op, mul_scale_op->getResults());
   } else if (right_op_name != "top.Weight") {
     // quantize right op
-    float right_threshold = calibration_map.at(out_name)[1];
-    auto right_op =  lowering_quantize(rewriter, op->getOperand(1), rightType, rewriter.getI8Type(), loc, right_threshold);
+    float right_threshold = threshold_map.at(out_name)[1];
+    float inv_scale_value = 127./right_threshold;
+    auto right_op =  lowering_quantize(rewriter, op->getOperand(1), rightType, rewriter.getI8Type(), loc, inv_scale_value);
 
     // MulOp
     auto action_type = RankedTensorType::get(outShape, rewriter.getI32Type());
@@ -283,12 +291,30 @@ void MulLoweringINT8::Lowering(PatternRewriter &rewriter, top::MulOp op) const {
 }
 
 //===------------------------------------------------------------===//
-// GELULoweringINT8
+// GELULoweringINT8  min -> -0.21
 //===------------------------------------------------------------===//
 void GELULoweringINT8::Lowering(PatternRewriter &rewriter, top::GELUOp op) const {
   assert(op->getNumResults() == 1);
   std::string out_name = op->getAttr("name").cast<StringAttr>().getValue().str();
-  auto threshold = calibration_map.at(out_name)[0];
+  auto threshold_vec = threshold_map.at(out_name);
+  auto fmin_vec = fmin_map.at(out_name);
+  auto fmax_vec = fmax_map.at(out_name);
+
+  auto in_threshold = threshold_vec[0];
+  // auto in_fmin = fmin_vec[0];
+  // auto in_fmax = fmax_vec[0];
+
+  // auto out_threshold = threshold_vec[threshold_vec.size() - 1];
+  auto out_fmin = fmin_vec[fmin_vec.size() - 1];
+  auto out_fmax = fmax_vec[fmax_vec.size() - 1];
+
+  float qmax = 127;
+  float qmin = -128;
+  // auto in_scale = (in_fmax - in_fmin) / (qmax - qmin);
+  // auto in_zp = -in_fmin/in_scale + qmin;
+
+  auto out_scale = (out_fmax - out_fmin) / (qmax - qmin);
+  auto out_zp = -out_fmin/out_scale + qmin;
 
   Location loc = op->getLoc();
   auto inType = op->getOperand(0).getType();
@@ -296,21 +322,26 @@ void GELULoweringINT8::Lowering(PatternRewriter &rewriter, top::GELUOp op) const
   std::vector<int64_t> out_shape(outType.cast<RankedTensorType>().getShape());
   
   // quantize
-  auto cast2int8_op =  lowering_quantize(rewriter, op->getOperand(0), inType, rewriter.getI8Type(), loc, threshold);
+  float inv_scale_value = 127/in_threshold;
+  auto cast2int8_op =  lowering_quantize(rewriter, op->getOperand(0), inType, rewriter.getI8Type(), loc, inv_scale_value);
 
   // make table
   // ConstOp
-  mlir::tosa::ConstOp table_attr = create_lookup_table(
-            rewriter, op->getLoc(), threshold,
+  mlir::tosa::ConstOp table_op = create_lookup_table(
+            rewriter, op->getLoc(), in_threshold, out_scale, out_zp, 
             [](double x){ return 0.5 * x * (1 + std::tanh(std::sqrt(2.0 / M_PI) * (x + 0.044715 * std::pow(x, 3))));});
 
   // TableOp
-  auto actionType = RankedTensorType::get({out_shape}, rewriter.getF32Type());
+  auto actionType = RankedTensorType::get({out_shape}, rewriter.getI8Type());
   auto action_op =
       rewriter.create<mlir::tosa::TableOp>(op->getLoc(), actionType, cast2int8_op->getResult(0), table_op->getResult(0));
 
+  // MulOp
+  // float scale_value = 5 / 255.;
+  auto mul_scale_op = lowering_dequantize(rewriter, action_op->getResult(0), outType, loc, out_scale, -out_zp);
+
   // Replace
-  rewriter.replaceOp(op, action_op->getResults());
+  rewriter.replaceOp(op, mul_scale_op->getResults());
 }
 
 
