@@ -19,6 +19,9 @@ void populateTopToTosaConversionINT8Patterns(RewritePatternSet *patterns, std::m
 OpLoweringINT8(Reshape)
 OpLoweringINT8(Add)
 OpLoweringINT8(MatMul)
+OpLoweringINT8(Mul)
+OpLoweringINT8(Permute)
+OpLoweringINT8(GELU)
 // clang-format on
 
 } // namespace mini_mlir

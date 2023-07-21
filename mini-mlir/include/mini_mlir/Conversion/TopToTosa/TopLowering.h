@@ -176,44 +176,18 @@ static float get_weight_threshold(PatternRewriter &rewriter, top::WeightOp weigh
   return threshold;
 }
 
-
-// template <typename T>
-// auto getVector(const T& input) {
-//   if constexpr(std::is_same_v<T, int8_t>) {
-//     return std::vector<int8_t>();
-//   } else if constexpr(std::is_same_v<T, int32_t>) {
-//     return std::vector<int32_t>();
-//   } 
-//   return std::vector<int32_t>();
-// }
-
-
 static mlir::tosa::ConstOp lowering_weight_int8(PatternRewriter &rewriter, top::WeightOp weight_op, 
         mlir::Type castType, Location loc, float threshold, std::vector<int64_t> in_shape) {
   auto valptr = weight_op.read_as_float();
   float inv_scale = 127./threshold;
-
   std::vector<float>& val = *valptr.get(); 
-  
-  // auto int_type = castType.dyn_cast<mlir::IntegerType>();
-  
-
-  // auto const_value = getVector(int_type.getWidth());
-  // typedef std::make_signed<decltype(int_type.getWidth())>::type signed_type;
-  // std::vector<signed_type> const_value;
   std::vector<int8_t> const_value;
+
   for (int i = 0; i < val.size(); i++) {
-    float tmp = std::clamp(val[i] * inv_scale, -127.f, 127.f);
+    float tmp = std::clamp(floor(val[i] * inv_scale + 0.5), -128., 127.);
     const_value.push_back(static_cast<int8_t>(tmp));
   }
-  // std::for_each(val.begin(), val.end(), [&](float& x) {
-  //   x = std::clamp(x * inv_scale, -127.f, 127.f);
-  //   const_value.push_back(static_cast<const_type>(x));
-  // });
-  // std::for_each(val.begin(), val.end(), [&](float& x) {
-  //   x = std::clamp(floor(x * inv_scale + 0.5), -128., 127.);
-  //   const_value.push_back(static_cast<signed_type>(x));
-  // });
+
   
   // ConstOp weight
   auto const_ty = RankedTensorType::get({in_shape}, castType);
@@ -229,28 +203,13 @@ static mlir::tosa::ConstOp lowering_weight_int32(PatternRewriter &rewriter, top:
         mlir::Type castType, Location loc, float threshold, std::vector<int64_t> in_shape) {
   auto valptr = weight_op.read_as_float();
   float inv_scale = 127./threshold;
-
   std::vector<float>& val = *valptr.get(); 
-  
-  // auto int_type = castType.dyn_cast<mlir::IntegerType>();
-  
-
-  // auto const_value = getVector(int_type.getWidth());
-  // typedef std::make_signed<decltype(int_type.getWidth())>::type signed_type;
-  // std::vector<signed_type> const_value;
   std::vector<int32_t> const_value;
+
   for (int i = 0; i < val.size(); i++) {
-    float tmp = std::clamp(val[i] * inv_scale, -127.f, 127.f);
+    float tmp = std::clamp(floor(val[i] * inv_scale + 0.5), -128., 127.);
     const_value.push_back(static_cast<int32_t>(tmp));
   }
-  // std::for_each(val.begin(), val.end(), [&](float& x) {
-  //   x = std::clamp(x * inv_scale, -127.f, 127.f);
-  //   const_value.push_back(static_cast<const_type>(x));
-  // });
-  // std::for_each(val.begin(), val.end(), [&](float& x) {
-  //   x = std::clamp(floor(x * inv_scale + 0.5), -128., 127.);
-  //   const_value.push_back(static_cast<signed_type>(x));
-  // });
   
   // ConstOp weight
   auto const_ty = RankedTensorType::get({in_shape}, castType);
@@ -262,7 +221,25 @@ static mlir::tosa::ConstOp lowering_weight_int32(PatternRewriter &rewriter, top:
   return const_op;
 }
 
+template <typename Func>
+static DenseElementsAttr create_lookup_table(PatternRewriter &rewriter, 
+                  Location loc, float threshold, Func func) {
+  int64_t min_th = 0;
+  int64_t max_th = 255;
 
+  float scale = threshold / static_cast<float>(max_th - min_th);
+  float inv_scale = 1. / scale;
 
+  std::vector<int8_t> table;
+  for (auto i = min_th; i <= max_th; i++) {
+    int8_t data = static_cast<int8_t>(func(i * scale) * inv_scale);
+    table.push_back(data);
+  }
 
+  auto table_type = RankedTensorType::get(
+      {256}, rewriter.getI8Type());
+  DenseElementsAttr attr = DenseElementsAttr::get(
+      table_type, llvm::ArrayRef(table.data(), table.size()));
+  return attr;
+}
 } // namespace mini_mlir

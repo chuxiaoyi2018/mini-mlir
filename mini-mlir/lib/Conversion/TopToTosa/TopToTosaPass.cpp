@@ -66,7 +66,7 @@ public:
       llvm_unreachable("can't open calibration table file!");
     }
 
-    std::map<std::string, std::vector<float>> calibration_map;
+    std::map<std::string, float> calibration_map;
 
     std::string line;
     while (std::getline(infile, line)) {
@@ -74,25 +74,47 @@ public:
       std::string name;
       std::getline(linestream, name, ',');
 
-      std::string value;
-      std::vector<float> thresholds;
+      float value;
 
-      while (std::getline(linestream, value, ',')) {
-        thresholds.push_back(atof(value.c_str()));
-      }
-      calibration_map[name] = thresholds; 
+      linestream >> value;
+      calibration_map[name] = value; 
     }
 
     infile.close();
     
+
+    std::map<std::string, std::vector<float>> calibration_map_with_parent;
+
+    auto mainFunc = module::getMainFuncOp();
+    mainFunc.walk([&](Operation *op) {
+      if (!isa<top::NoneOp, top::InputOp, ReturnOp, FuncOp>(op)) {
+        std::vector<float> tmp{0., 0., 0., 0.};
+        int operand_num = static_cast<int>(op->getNumOperands());
+        for (int i = 0; i < 2 && operand_num > 0; i++, operand_num--) {
+          std::string operand_name = op->getOperand(i).getDefiningOp()->getAttr("name").cast<StringAttr>().getValue().str();
+          if (calibration_map.find(operand_name) != calibration_map.end()) {
+            tmp[i] = calibration_map.at(operand_name);
+          }
+          
+          // i += 1;
+          // operand_num -= 1;
+        }
+        std::string node_name = op->getAttr("name").cast<StringAttr>().getValue().str();
+        if (calibration_map.find(node_name) != calibration_map.end() && tmp[0] != 0 && tmp[0] < 20 && tmp[3] < 20) {
+          tmp[tmp.size() - 1] = calibration_map.at(node_name);
+          calibration_map_with_parent[node_name] = tmp;
+        }
+      }
+    });
+
+
     auto config = GreedyRewriteConfig();
     config.maxIterations = 1;
-
 
     // Match Order: int8 -> fp32 -> weight
     // Lowering to INT8
     if (weightType == "INT8") {
-      populateTopToTosaConversionINT8Patterns(&patterns, calibration_map);
+      populateTopToTosaConversionINT8Patterns(&patterns, calibration_map_with_parent);
       applyPatternsAndFoldGreedily(module_, std::move(patterns), config);
       patterns.clear();
     }
