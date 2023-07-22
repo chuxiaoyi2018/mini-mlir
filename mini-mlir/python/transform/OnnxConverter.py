@@ -966,6 +966,7 @@ class OnnxConverter(BaseConverter):
             elif len(lhs_shape) == 2 and (len(rhs_shape) == 1 or len(rhs_shape) == 0) and self.chip == "cpu":
                 weight = weight.reshape(1,-1)
             else:
+                import pdb;pdb.set_trace()
                 raise RuntimeError("not suppport now")
             self.tensors[rhs] = weight
             self.shapes[rhs] = weight.shape

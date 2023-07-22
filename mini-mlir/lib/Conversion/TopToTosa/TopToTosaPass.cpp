@@ -114,8 +114,7 @@ public:
         std::string node_name =
             op->getAttr("name").cast<StringAttr>().getValue().str();
         if (threshold_map.find(node_name) != threshold_map.end() &&
-            threshold_vec[0] != 0 && threshold_vec[0] < 20 &&
-            threshold_vec[3] < 20) {
+            threshold_vec[0] != 0) {
           threshold_vec[threshold_vec.size() - 1] = threshold_map.at(node_name);
           fmin_vec[threshold_vec.size() - 1] = fmin_map.at(node_name);
           fmax_vec[threshold_vec.size() - 1] = fmax_map.at(node_name);

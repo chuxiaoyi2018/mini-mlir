@@ -34,5 +34,5 @@ OpLoweringINT8(Mul)
 OpLoweringINT8(Permute)
 OpLoweringINT8(GELU)
 // clang-format on
-
+ 
 } // namespace mini_mlir

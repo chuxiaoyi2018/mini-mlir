@@ -376,9 +376,9 @@ void GELULoweringINT8::Lowering(PatternRewriter &rewriter,
   auto fmin_vec = fmin_map.at(out_name);
   auto fmax_vec = fmax_map.at(out_name);
 
-  auto in_threshold = threshold_vec[0];
-  // auto in_fmin = fmin_vec[0];
-  // auto in_fmax = fmax_vec[0];
+//   auto in_threshold = threshold_vec[0];
+  auto in_fmin = fmin_vec[0];
+  auto in_fmax = fmax_vec[0];
 
   // auto out_threshold = threshold_vec[threshold_vec.size() - 1];
   auto out_fmin = fmin_vec[fmin_vec.size() - 1];
@@ -386,43 +386,64 @@ void GELULoweringINT8::Lowering(PatternRewriter &rewriter,
 
   float qmax = 127;
   float qmin = -128;
-  // auto in_scale = (in_fmax - in_fmin) / (qmax - qmin);
-  // auto in_zp = -in_fmin/in_scale + qmin;
 
-  auto out_scale = (out_fmax - out_fmin) / (qmax - qmin);
-  auto out_zp = - out_fmin / out_scale + qmin;
+
 
   Location loc = op->getLoc();
   auto inType = op->getOperand(0).getType();
   auto outType = op->getResult(0).getType();
   std::vector<int64_t> out_shape(outType.cast<RankedTensorType>().getShape());
 
-  // quantize
-  float inv_scale_value = 127 / in_threshold;
-  auto cast2int8_op =
-      lowering_quantize(rewriter, op->getOperand(0), inType,
-                        rewriter.getI8Type(), loc, inv_scale_value);
+  // ClampOp
+  auto positive_value = gen_clamp_value(rewriter, inType, op->getLoc(), op->getOperand(0), 0.f);
+  auto negative_value = gen_clamp_value(rewriter, inType, op->getLoc(), op->getOperand(0), std::numeric_limits<float>::lowest(), 0.f);
 
-  // ConstOp make table
-  mlir::tosa::ConstOp table_op = create_lookup_table(
-      rewriter, op->getLoc(), in_threshold, out_scale, out_zp, [](double x) {
-        return 0.5 * x *
-               (1 + std::tanh(std::sqrt(2.0 / M_PI) *
-                              (x + 0.044715 * std::pow(x, 3))));
-      });
-
-  // TableOp
-  auto actionType = RankedTensorType::get({out_shape}, rewriter.getI8Type());
-  auto action_op = rewriter.create<mlir::tosa::TableOp>(
-      op->getLoc(), actionType, cast2int8_op->getResult(0),
-      table_op->getResult(0));
-
-  // dequantize
-  auto mul_scale_op = lowering_dequantize(rewriter, action_op->getResult(0),
+  // positive
+  auto in_scale = (in_fmax - 0.f) / (qmax - qmin);
+  auto in_zp = -0.f/in_scale + qmin;
+  auto out_scale = (out_fmax - 0.) / (qmax - qmin);
+  auto out_zp = - 0. / out_scale + qmin;
+  auto pos_cast2int8_op =
+      lowering_quantize(rewriter, positive_value, inType,
+                        rewriter.getI8Type(), loc, in_scale, in_zp);
+//   mlir::tosa::ConstOp pos_table_op = create_lookup_table(
+//       rewriter, op->getLoc(), in_scale, in_zp, out_scale, out_zp, qmax, qmin, [](double x) {
+//         return 0.5 * x *
+//                (1 + std::tanh(std::sqrt(2.0 / M_PI) *
+//                               (x + 0.044715 * std::pow(x, 3))));
+//       });
+  mlir::tosa::ConstOp pos_table_op = create_lookup_table(
+      rewriter, op->getLoc(), in_scale, in_zp, out_scale, out_zp, qmax, qmin);
+  auto pos_action_op = rewriter.create<mlir::tosa::TableOp>(
+      op->getLoc(), RankedTensorType::get({out_shape}, rewriter.getI8Type()), pos_cast2int8_op->getResult(0),
+      pos_table_op->getResult(0));
+  auto pos_mul_scale_op = lowering_dequantize(rewriter, pos_action_op->getResult(0),
                                           outType, loc, out_scale, out_zp);
 
+  // negative
+  in_scale = (0.f - in_fmin) / (qmax - qmin);
+  in_zp = -in_fmin/in_scale + qmin;
+  out_scale = (0. - out_fmin) / (qmax - qmin);
+  out_zp = - out_fmin / out_scale + qmin;
+  auto neg_cast2int8_op =
+      lowering_quantize(rewriter, negative_value, inType,
+                        rewriter.getI8Type(), loc, in_scale, in_zp);
+  mlir::tosa::ConstOp neg_table_op = create_lookup_table(
+      rewriter, op->getLoc(), in_scale, in_zp, out_scale, out_zp, qmax, qmin);
+  auto neg_action_op = rewriter.create<mlir::tosa::TableOp>(
+      op->getLoc(), RankedTensorType::get({out_shape}, rewriter.getI8Type()), neg_cast2int8_op->getResult(0),
+      neg_table_op->getResult(0));
+  auto neg_mul_scale_op = lowering_dequantize(rewriter, neg_action_op->getResult(0),
+                                          outType, loc, out_scale, out_zp);
+
+
+  // AddOp
+auto final_add_op = rewriter.create<mlir::tosa::AddOp>(
+    op->getLoc(), outType, pos_mul_scale_op->getResult(0),
+    neg_mul_scale_op->getResult(0));
+
   // Replace
-  rewriter.replaceOp(op, mul_scale_op->getResults());
+  rewriter.replaceOp(op, final_add_op->getResults());
 }
 
 } // namespace mini_mlir
