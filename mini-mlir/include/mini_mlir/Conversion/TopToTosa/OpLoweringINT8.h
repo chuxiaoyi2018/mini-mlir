@@ -33,13 +33,12 @@ OpLoweringINT8(MatMul)
 OpLoweringINT8(Mul)
 OpLoweringINT8(Permute)
 OpLoweringINT8(GELU)
-    // clang-format on
+// clang-format on
 
-    mlir::Value
-    GELULoweringINT8_v1(PatternRewriter &rewriter, mlir::Value in_value,
-                        mlir::Type inType, mlir::Type outType, Location loc,
-                        float in_fmin, float in_fmax, float out_fmin,
-                        float out_fmax, float qmin, float qmax);
+mlir::Value GELULoweringINT8_v1(PatternRewriter &rewriter, mlir::Value in_value,
+                                mlir::Type inType, mlir::Type outType, Location loc,
+                                float in_fmin, float in_fmax, float out_fmin,
+                                float out_fmax, float qmin, float qmax);
 
 mlir::Value GELULoweringINT8_v2(PatternRewriter &rewriter, mlir::Value in_value,
                                 mlir::Type inType, mlir::Type outType,

@@ -403,8 +403,6 @@ void GELULoweringINT8::Lowering(PatternRewriter &rewriter,
                                   op->getLoc(), in_fmin, in_fmax, out_fmin,
                                   out_fmax, qmin, qmax);
   }
-  // gelu_op = GELULoweringINT8_v1(rewriter, op->getOperand(0), inType, outType,
-  // op->getLoc(), in_fmin, in_fmax, out_fmin, out_fmax, qmin, qmax);
 
   // Replace
   rewriter.replaceOp(op, gelu_op);
