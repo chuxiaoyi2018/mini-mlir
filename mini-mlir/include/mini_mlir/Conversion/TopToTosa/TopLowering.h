@@ -115,40 +115,37 @@ static std::vector<NamedAttribute> gen_clamp_attr(PatternRewriter &rewriter,
   return clamp_attr;
 }
 
-static mlir::Value gen_clamp_value(PatternRewriter &rewriter,
-                                                  Type newType,
-                                                  Location loc,
-                                                  mlir::Value in_value,
-                                                  float min_fp = std::numeric_limits<float>::lowest(),
-                                                  float max_fp = std::numeric_limits<float>::max(),
-                                                  int64_t min_int = std::numeric_limits<int64_t>::lowest(),
-                                                  int64_t max_int = std::numeric_limits<int64_t>::max()) {
+static mlir::Value
+gen_clamp_value(PatternRewriter &rewriter, Type newType, Location loc,
+                mlir::Value in_value,
+                float min_fp = std::numeric_limits<float>::lowest(),
+                float max_fp = std::numeric_limits<float>::max(),
+                int64_t min_int = std::numeric_limits<int64_t>::lowest(),
+                int64_t max_int = std::numeric_limits<int64_t>::max()) {
   std::vector<NamedAttribute> clamp_attr;
   clamp_attr.push_back(
       rewriter.getNamedAttr("min_fp", rewriter.getF32FloatAttr(min_fp)));
   clamp_attr.push_back(
-    rewriter.getNamedAttr("max_fp", rewriter.getF32FloatAttr(max_fp)));
+      rewriter.getNamedAttr("max_fp", rewriter.getF32FloatAttr(max_fp)));
   clamp_attr.push_back(
       rewriter.getNamedAttr("min_int", rewriter.getI64IntegerAttr(min_int)));
   clamp_attr.push_back(
       rewriter.getNamedAttr("max_int", rewriter.getI64IntegerAttr(max_int)));
 
   auto clamp_op =
-      rewriter.create<mlir::tosa::ClampOp>(
-          loc, newType, in_value, clamp_attr);
+      rewriter.create<mlir::tosa::ClampOp>(loc, newType, in_value, clamp_attr);
   return clamp_op->getResult(0);
 }
 
 //===------------------------------------------------------------===//
 // GetScaleAndZeropoint
 //===------------------------------------------------------------===//
-static std::tuple<float, float> get_scale_and_zeropoint(float fmax, float fmin,
-                                     float qmax, float qmin) {
+static std::tuple<float, float>
+get_scale_and_zeropoint(float fmax, float fmin, float qmax, float qmin) {
   auto scale = (fmax - fmin) / (qmax - qmin);
-  auto zp = -fmin/scale + qmin;
+  auto zp = -fmin / scale + qmin;
   return std::make_tuple(scale, zp);
 }
-
 
 //===------------------------------------------------------------===//
 // GetWeightThreshold
@@ -219,8 +216,9 @@ lowering_weight_int32(PatternRewriter &rewriter, top::WeightOp weight_op,
 //===------------------------------------------------------------===//
 template <typename Func>
 static tosa::ConstOp
-create_lookup_table(PatternRewriter &rewriter, Location loc, float in_scale, float in_zp,
-                    float out_scale, float out_zp, float qmax, float qmin, Func func) {
+create_lookup_table(PatternRewriter &rewriter, Location loc, float in_scale,
+                    float in_zp, float out_scale, float out_zp, float qmax,
+                    float qmin, Func func) {
 
   std::vector<int8_t> table;
   int64_t min_th = qmin;
@@ -239,9 +237,10 @@ create_lookup_table(PatternRewriter &rewriter, Location loc, float in_scale, flo
   return rewriter.create<tosa::ConstOp>(loc, const_type, const_attr);
 }
 
-static tosa::ConstOp
-create_lookup_table(PatternRewriter &rewriter, Location loc, float in_scale, float in_zp,
-                    float out_scale, float out_zp, float qmax, float qmin) {
+static tosa::ConstOp create_lookup_table(PatternRewriter &rewriter,
+                                         Location loc, float in_scale,
+                                         float in_zp, float out_scale,
+                                         float out_zp, float qmax, float qmin) {
 
   std::vector<int8_t> table;
   int64_t min_th = qmin;
@@ -250,8 +249,8 @@ create_lookup_table(PatternRewriter &rewriter, Location loc, float in_scale, flo
   for (auto i = min_th; i <= max_th; i++) {
     float x = (i - in_zp) * in_scale;
     float step = 0.5 * x *
-               (1. + std::tanh(std::sqrt(2.0 / M_PI) *
-                              (x + 0.044715 * std::pow(x, 3))));
+                 (1. + std::tanh(std::sqrt(2.0 / M_PI) *
+                                 (x + 0.044715 * std::pow(x, 3))));
     float tmp = std::clamp(floor(step / out_scale + out_zp), -128., 127.);
     int8_t data = static_cast<int8_t>(tmp);
     table.push_back(data);
@@ -337,7 +336,7 @@ lowering_quantize(PatternRewriter &rewriter, mlir::Value in_value,
                   mlir::Type inType, mlir::Type eleType, mlir::Location loc,
                   float in_scale, float in_zp) {
   // MulOp
-  std::vector<float> const_inv_scale_vec{1.f/in_scale};
+  std::vector<float> const_inv_scale_vec{1.f / in_scale};
   auto const_inv_scale_op =
       create_const_op(rewriter, inType, loc, const_inv_scale_vec);
   auto mul_inv_scale_op = rewriter.create<mlir::tosa::MulOp>(
