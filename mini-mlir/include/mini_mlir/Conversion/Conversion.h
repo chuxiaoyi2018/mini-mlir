@@ -11,6 +11,7 @@ namespace mlir {
 namespace mini_mlir {
 
 std::unique_ptr<Pass> createConvertTopToTosa();
+std::unique_ptr<Pass> createTosaOpFoldPass();
 
 } // namespace mini_mlir
 

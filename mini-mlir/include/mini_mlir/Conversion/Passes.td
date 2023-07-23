@@ -23,4 +23,17 @@ def ConvertTopToTosa : Pass<"convert-top-to-tosa", "ModuleOp"> {
   ];
 }
 
+//===----------------------------------------------------------------------===//
+// TopToTosa
+//===----------------------------------------------------------------------===//
+def TosaOpFoldPass : Pass<"tosa-op-fold", "ModuleOp"> {
+  let summary = "Fold layerwise operations on tosa";
+  let description = [{
+    Pass that enables folding of full-layer operations.
+  }];
+  let dependentDialects =
+      [ "mini_mlir::top::TopDialect", "mlir::tosa::TosaDialect"];
+  let constructor = "mini_mlir::createTosaOpFoldPass()";
+}
+
 #endif // MINI_MLIR_CONVERSION_PASSES
