@@ -25,29 +25,11 @@ public:
     config.maxIterations = 1;
 
     populateTosaFoldDoubleReciprocalPatterns(&patterns);
+    applyPatternsAndFoldGreedily(module_, std::move(patterns), config);
+    patterns.clear();
 
-    // // Match Order: int8 -> fp32 -> weight
-    // // Lowering to INT8
-    // if (weightType == "INT8") {
-    //   populateTopToTosaConversionINT8Patterns(
-    //       &patterns, threshold_map_with_parent, fmin_map_with_parent,
-    //       fmax_map_with_parent);
-    //   applyPatternsAndFoldGreedily(module_, std::move(patterns), config);
-    //   patterns.clear();
-    // }
-
-    // // Lowering to FP32
-    // populateTopToTosaConversionPatterns(&patterns);
-    // applyPatternsAndFoldGreedily(module_, std::move(patterns), config);
-    // patterns.clear();
-
-    // // Lower weight
-    // patterns.add<WeightLowering>(patterns.getContext(), includeWeight);
-    // applyPatternsAndFoldGreedily(module_, std::move(patterns), config);
-    // patterns.clear();
-
-    // module::updateModuleTypes();
-    // module::setState(module::State::TOSA_F32);
+    module::updateModuleTypes();
+    module::setState(module::State::TOSA_F32);
   }
 
 protected:
