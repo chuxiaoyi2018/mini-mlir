@@ -27,6 +27,9 @@ void ReshapeLoweringINT8::Lowering(PatternRewriter &rewriter,
   assert(op->getNumResults() == 1);
   std::string out_name =
       op->getAttr("name").cast<StringAttr>().getValue().str();
+  if (threshold_map.find(out_name) == threshold_map.end()) {
+    return;
+  }
   auto threshold = threshold_map.at(out_name)[0];
   float inv_scale_value = 127. / threshold;
 
@@ -62,6 +65,9 @@ void PermuteLoweringINT8::Lowering(PatternRewriter &rewriter,
   assert(op->getNumResults() == 1);
   std::string out_name =
       op->getAttr("name").cast<StringAttr>().getValue().str();
+  if (threshold_map.find(out_name) == threshold_map.end()) {
+    return;
+  }
   auto threshold = threshold_map.at(out_name)[0];
   float inv_scale_value = 127. / threshold;
 
@@ -372,78 +378,166 @@ void GELULoweringINT8::Lowering(PatternRewriter &rewriter,
   assert(op->getNumResults() == 1);
   std::string out_name =
       op->getAttr("name").cast<StringAttr>().getValue().str();
-  auto threshold_vec = threshold_map.at(out_name);
+  if (threshold_map.find(out_name) == threshold_map.end()) {
+    return;
+  }
   auto fmin_vec = fmin_map.at(out_name);
   auto fmax_vec = fmax_map.at(out_name);
-
-//   auto in_threshold = threshold_vec[0];
   auto in_fmin = fmin_vec[0];
   auto in_fmax = fmax_vec[0];
-
-  // auto out_threshold = threshold_vec[threshold_vec.size() - 1];
   auto out_fmin = fmin_vec[fmin_vec.size() - 1];
   auto out_fmax = fmax_vec[fmax_vec.size() - 1];
-
   float qmax = 127;
   float qmin = -128;
-
-
-
-  Location loc = op->getLoc();
   auto inType = op->getOperand(0).getType();
   auto outType = op->getResult(0).getType();
+  mlir::Value gelu_op;
+  if (in_fmax > 10.){
+    in_fmax = 10.f;
+    out_fmax = 10.f;
+    gelu_op = GELULoweringINT8_v2(rewriter, op->getOperand(0), inType, outType, op->getLoc(), in_fmin, in_fmax, out_fmin, out_fmax, qmin, qmax);
+  } else {
+    gelu_op = GELULoweringINT8_v1(rewriter, op->getOperand(0), inType, outType, op->getLoc(), in_fmin, in_fmax, out_fmin, out_fmax, qmin, qmax);
+  }
+  // gelu_op = GELULoweringINT8_v1(rewriter, op->getOperand(0), inType, outType, op->getLoc(), in_fmin, in_fmax, out_fmin, out_fmax, qmin, qmax);
+
+  // Replace
+  rewriter.replaceOp(op, gelu_op);
+}
+
+mlir::Value GELULoweringINT8_v1(PatternRewriter &rewriter,
+                                mlir::Value in_value,
+                                mlir::Type inType,
+                                mlir::Type outType,
+                                Location loc,
+                                float in_fmin,
+                                float in_fmax,
+                                float out_fmin,
+                                float out_fmax,
+                                float qmin,
+                                float qmax) {
   std::vector<int64_t> out_shape(outType.cast<RankedTensorType>().getShape());
 
   // ClampOp
-  auto positive_value = gen_clamp_value(rewriter, inType, op->getLoc(), op->getOperand(0), 0.f);
-  auto negative_value = gen_clamp_value(rewriter, inType, op->getLoc(), op->getOperand(0), std::numeric_limits<float>::lowest(), 0.f);
+  auto positive_value = gen_clamp_value(rewriter, inType, loc, in_value, 0.f);
+  auto negative_value = gen_clamp_value(rewriter, inType, loc, in_value, std::numeric_limits<float>::lowest(), 0.f);
+
+  // Scale & Zeropoint
+  float in_scale, in_zp, out_scale, out_zp;
 
   // positive
-  auto in_scale = (in_fmax - 0.f) / (qmax - qmin);
-  auto in_zp = -0.f/in_scale + qmin;
-  auto out_scale = (out_fmax - 0.) / (qmax - qmin);
-  auto out_zp = - 0. / out_scale + qmin;
+  std::tie(in_scale, in_zp) = get_scale_and_zeropoint(in_fmax, 0.f, qmax, qmin);
+  std::tie(out_scale, out_zp) = get_scale_and_zeropoint(out_fmax, 0.f, qmax, qmin);
   auto pos_cast2int8_op =
       lowering_quantize(rewriter, positive_value, inType,
                         rewriter.getI8Type(), loc, in_scale, in_zp);
-//   mlir::tosa::ConstOp pos_table_op = create_lookup_table(
-//       rewriter, op->getLoc(), in_scale, in_zp, out_scale, out_zp, qmax, qmin, [](double x) {
-//         return 0.5 * x *
-//                (1 + std::tanh(std::sqrt(2.0 / M_PI) *
-//                               (x + 0.044715 * std::pow(x, 3))));
-//       });
   mlir::tosa::ConstOp pos_table_op = create_lookup_table(
-      rewriter, op->getLoc(), in_scale, in_zp, out_scale, out_zp, qmax, qmin);
+      rewriter, loc, in_scale, in_zp, out_scale, out_zp, qmax, qmin);
   auto pos_action_op = rewriter.create<mlir::tosa::TableOp>(
-      op->getLoc(), RankedTensorType::get({out_shape}, rewriter.getI8Type()), pos_cast2int8_op->getResult(0),
+      loc, RankedTensorType::get({out_shape}, rewriter.getI8Type()), pos_cast2int8_op->getResult(0),
       pos_table_op->getResult(0));
   auto pos_mul_scale_op = lowering_dequantize(rewriter, pos_action_op->getResult(0),
                                           outType, loc, out_scale, out_zp);
 
   // negative
-  in_scale = (0.f - in_fmin) / (qmax - qmin);
-  in_zp = -in_fmin/in_scale + qmin;
-  out_scale = (0. - out_fmin) / (qmax - qmin);
-  out_zp = - out_fmin / out_scale + qmin;
+  std::tie(in_scale, in_zp) = get_scale_and_zeropoint(0.f, in_fmin, qmax, qmin);
+  std::tie(out_scale, out_zp) = get_scale_and_zeropoint(0.f, out_fmin, qmax, qmin);
   auto neg_cast2int8_op =
       lowering_quantize(rewriter, negative_value, inType,
                         rewriter.getI8Type(), loc, in_scale, in_zp);
   mlir::tosa::ConstOp neg_table_op = create_lookup_table(
-      rewriter, op->getLoc(), in_scale, in_zp, out_scale, out_zp, qmax, qmin);
+      rewriter, loc, in_scale, in_zp, out_scale, out_zp, qmax, qmin);
   auto neg_action_op = rewriter.create<mlir::tosa::TableOp>(
-      op->getLoc(), RankedTensorType::get({out_shape}, rewriter.getI8Type()), neg_cast2int8_op->getResult(0),
+      loc, RankedTensorType::get({out_shape}, rewriter.getI8Type()), neg_cast2int8_op->getResult(0),
       neg_table_op->getResult(0));
   auto neg_mul_scale_op = lowering_dequantize(rewriter, neg_action_op->getResult(0),
                                           outType, loc, out_scale, out_zp);
 
+  // AddOp
+  auto neg_pos_add_op = rewriter.create<mlir::tosa::AddOp>(
+      loc, outType, pos_mul_scale_op->getResult(0),
+      neg_mul_scale_op->getResult(0));
+
+  return neg_pos_add_op->getResult(0);
+}
+
+mlir::Value GELULoweringINT8_v2(PatternRewriter &rewriter,
+                                mlir::Value in_value,
+                                mlir::Type inType,
+                                mlir::Type outType,
+                                Location loc,
+                                float in_fmin,
+                                float in_fmax,
+                                float out_fmin,
+                                float out_fmax,
+                                float qmin,
+                                float qmax) {
+  std::vector<int64_t> out_shape(outType.cast<RankedTensorType>().getShape());
+
+  // Large Positive
+  // GreaterOp
+  std::vector<float> const_sub_vec{in_fmax};
+  auto const_greater_op =
+      create_const_op(rewriter, inType, loc, const_sub_vec);
+  auto greater_op = rewriter.create<mlir::tosa::GreaterOp>(
+      loc, RankedTensorType::get({out_shape}, rewriter.getI1Type()), in_value,
+      const_greater_op->getResult(0));
+
+  // CastOp
+  auto cast_op =
+      rewriter.create<mlir::tosa::CastOp>(loc, RankedTensorType::get({out_shape}, rewriter.getF32Type()), greater_op->getResult(0));
+
+  // MulOp
+  auto mul_op = rewriter.create<mlir::tosa::MulOp>(
+      loc, outType, in_value, cast_op->getResult(0),
+      rewriter.getI32IntegerAttr(0));
+  
+  // Clamp
+  auto clamp_value = gen_clamp_value(rewriter, inType, loc, in_value, std::numeric_limits<float>::lowest(), in_fmax);
+  auto positive_value = gen_clamp_value(rewriter, inType, loc, clamp_value, 0.f);
+  auto negative_value = gen_clamp_value(rewriter, inType, loc, clamp_value, std::numeric_limits<float>::lowest(), 0.f);
+
+  // Scale & Zeropoint
+  float in_scale, in_zp, out_scale, out_zp;
+
+  // positive
+  std::tie(in_scale, in_zp) = get_scale_and_zeropoint(in_fmax, 0.f, qmax, qmin);
+  std::tie(out_scale, out_zp) = get_scale_and_zeropoint(out_fmax, 0.f, qmax, qmin);
+  auto pos_cast2int8_op =
+      lowering_quantize(rewriter, positive_value, inType,
+                        rewriter.getI8Type(), loc, in_scale, in_zp);
+  mlir::tosa::ConstOp pos_table_op = create_lookup_table(
+      rewriter, loc, in_scale, in_zp, out_scale, out_zp, qmax, qmin);
+  auto pos_action_op = rewriter.create<mlir::tosa::TableOp>(
+      loc, RankedTensorType::get({out_shape}, rewriter.getI8Type()), pos_cast2int8_op->getResult(0),
+      pos_table_op->getResult(0));
+  auto pos_mul_scale_op = lowering_dequantize(rewriter, pos_action_op->getResult(0),
+                                          outType, loc, out_scale, out_zp);
+
+  // negative
+  std::tie(in_scale, in_zp) = get_scale_and_zeropoint(0.f, in_fmin, qmax, qmin);
+  std::tie(out_scale, out_zp) = get_scale_and_zeropoint(0.f, out_fmin, qmax, qmin);
+  auto neg_cast2int8_op =
+      lowering_quantize(rewriter, negative_value, inType,
+                        rewriter.getI8Type(), loc, in_scale, in_zp);
+  mlir::tosa::ConstOp neg_table_op = create_lookup_table(
+      rewriter, loc, in_scale, in_zp, out_scale, out_zp, qmax, qmin);
+  auto neg_action_op = rewriter.create<mlir::tosa::TableOp>(
+      loc, RankedTensorType::get({out_shape}, rewriter.getI8Type()), neg_cast2int8_op->getResult(0),
+      neg_table_op->getResult(0));
+  auto neg_mul_scale_op = lowering_dequantize(rewriter, neg_action_op->getResult(0),
+                                          outType, loc, out_scale, out_zp);
 
   // AddOp
-auto final_add_op = rewriter.create<mlir::tosa::AddOp>(
-    op->getLoc(), outType, pos_mul_scale_op->getResult(0),
-    neg_mul_scale_op->getResult(0));
+  auto neg_pos_add_op = rewriter.create<mlir::tosa::AddOp>(
+      loc, outType, pos_mul_scale_op->getResult(0),
+      neg_mul_scale_op->getResult(0));
 
-  // Replace
-  rewriter.replaceOp(op, final_add_op->getResults());
+  // AddOp large value
+  auto final_add_op = rewriter.create<mlir::tosa::AddOp>(
+      loc, outType, neg_pos_add_op->getResult(0),
+      mul_op->getResult(0));
+  return final_add_op->getResult(0);
 }
 
 } // namespace mini_mlir

@@ -140,6 +140,17 @@ static mlir::Value gen_clamp_value(PatternRewriter &rewriter,
 }
 
 //===------------------------------------------------------------===//
+// GetScaleAndZeropoint
+//===------------------------------------------------------------===//
+static std::tuple<float, float> get_scale_and_zeropoint(float fmax, float fmin,
+                                     float qmax, float qmin) {
+  auto scale = (fmax - fmin) / (qmax - qmin);
+  auto zp = -fmin/scale + qmin;
+  return std::make_tuple(scale, zp);
+}
+
+
+//===------------------------------------------------------------===//
 // GetWeightThreshold
 //===------------------------------------------------------------===//
 static float get_weight_threshold(PatternRewriter &rewriter,
@@ -398,7 +409,7 @@ static mlir::tosa::MulOp lowering_dequantize(PatternRewriter &rewriter,
   std::vector<float> const_vec_for_add{out_zp};
   auto const_op_for_add =
       create_const_op(rewriter, cast2fp32_ty, loc, const_vec_for_add);
-  auto add_op = rewriter.create<mlir::tosa::SubOp>(
+  auto sub_op = rewriter.create<mlir::tosa::SubOp>(
       loc, cast2fp32_ty, cast2fp32_op->getResult(0),
       const_op_for_add->getResult(0));
 
@@ -409,7 +420,7 @@ static mlir::tosa::MulOp lowering_dequantize(PatternRewriter &rewriter,
 
   // MulOp for fp32
   auto mul_scale_op = rewriter.create<mlir::tosa::MulOp>(
-      loc, outType, add_op->getResult(0), const_op_for_scale->getResult(0),
+      loc, outType, sub_op->getResult(0), const_op_for_scale->getResult(0),
       rewriter.getI32IntegerAttr(0));
   return mul_scale_op;
 }
