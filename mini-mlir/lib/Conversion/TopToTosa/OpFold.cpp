@@ -9,14 +9,12 @@ struct TosaFoldDoubleReciprocal
                                 PatternRewriter &rewriter) const override {
     mlir::Value value1 = op1->getOperand(0);
     if (auto op2 = value1.getDefiningOp<mlir::tosa::ReciprocalOp>()) {
-      // 找到连续的两个reciprocal操作
+      // find double continous reciprocal op
       mlir::Value value2 = op2->getOperand(0);
-
-      // 用操作数替换第一个reciprocal的结果
+      // replace the second reciprocal op with the input value of first reciprocal
       rewriter.replaceAllUsesWith(op2, value2);
-      // 删除第一个reciprocal操作
+      // remove the first reciprocal op
       rewriter.eraseOp(op2);
-
       rewriter.replaceAllUsesWith(op1, value2);
       rewriter.eraseOp(op1);
       return success();
@@ -56,8 +54,26 @@ struct TosaFoldDoubleMul : public OpRewritePattern<mlir::tosa::MulOp> {
   }
 };
 
+struct TosaFoldDoubleCast
+    : public OpRewritePattern<mlir::tosa::CastOp> {
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(mlir::tosa::CastOp op1,
+                                PatternRewriter &rewriter) const override {
+    mlir::Value value1 = op1->getOperand(0);
+    if (auto op2 = value1.getDefiningOp<mlir::tosa::CastOp>()) {
+      mlir::Value value2 = op2->getOperand(0);
+      rewriter.replaceAllUsesWith(op2, value2);
+      rewriter.eraseOp(op2);
+      rewriter.replaceAllUsesWith(op1, value2);
+      rewriter.eraseOp(op1);
+      return success();
+    }
+    return failure();
+  }
+};
+
 void populateTosaOpFoldPatterns(RewritePatternSet *patterns) {
-  patterns->add<TosaFoldDoubleReciprocal, TosaFoldDoubleMul>(
+  patterns->add<TosaFoldDoubleReciprocal, TosaFoldDoubleMul, TosaFoldDoubleCast>(
       patterns->getContext());
 }
 
