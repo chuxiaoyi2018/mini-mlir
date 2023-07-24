@@ -9,8 +9,7 @@ namespace mlir {
 
 namespace mini_mlir {
 
-struct TosaOpFoldPass
-    : public ::impl::TosaOpFoldPassBase<TosaOpFoldPass> {
+struct TosaOpFoldPass : public ::impl::TosaOpFoldPassBase<TosaOpFoldPass> {
 public:
   void runOnOperation() override {
     module_ = getOperation();
@@ -22,9 +21,9 @@ public:
     target.addLegalDialect<mlir::tosa::TosaDialect, mlir::func::FuncDialect>();
 
     auto config = GreedyRewriteConfig();
-    config.maxIterations = 1;
+    config.maxIterations = 2; // first fold double mul, then fold double cast
 
-    populateTosaFoldDoubleReciprocalPatterns(&patterns);
+    populateTosaOpFoldPatterns(&patterns);
     applyPatternsAndFoldGreedily(module_, std::move(patterns), config);
     patterns.clear();
 
