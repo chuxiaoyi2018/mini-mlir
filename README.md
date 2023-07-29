@@ -63,6 +63,7 @@ https://github.com/chuxiaoyi2018/mini-mlir/releases/tag/mini-mlir
 
 
 #### TODO List:
+* xmake
 * fastgelu
 * layergroup
 * 完全softmax、layernorm、conv等大算子的下降
