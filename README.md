@@ -1,5 +1,31 @@
 # mini-mlir
 
+
+### how to compile the project
+```
+cd /workspace
+git clone https://github.com/chuxiaoyi2018/mini-mlir.git --depth 1
+cd mini-mlir/mini-mlir
+source mini_envsetup.sh
+./build.sh
+```
+
+### how to run examples
+```
+cd example
+cd vit
+python torch2onnx.sh
+sh onnx2mlir.sh
+sh top2tosa.sh
+sh tosa2llvmir.sh
+sh llvmir2out.sh
+sh cpu_infer.sh
+```
+
+
+---------------------------------------------------------------------
+### 版本变更
+
 #### 第二版
 
 【版本改动】
@@ -34,29 +60,9 @@ https://github.com/chuxiaoyi2018/mini-mlir/releases/tag/mini-mlir
 【版本改动】
 * 做了一个代码的重构，使得目录更为清晰简洁
 
-------------------------------
+--------------------------------------------
 
 
-how to compile the project
-```
-cd /workspace
-git clone https://github.com/chuxiaoyi2018/mini-mlir.git --depth 1
-cd mini-mlir/mini-mlir
-source mini_envsetup.sh
-./build.sh
-```
-
-how to run examples
-```
-cd example
-cd vit
-python torch2onnx.sh
-sh onnx2mlir.sh
-sh top2tosa.sh
-sh tosa2llvmir.sh
-sh llvmir2out.sh
-sh cpu_infer.sh
-```
 
 
 #### TODO List:
