@@ -3,17 +3,14 @@
 
 ### how to compile the project
 ```
-cd /workspace
 git clone https://github.com/chuxiaoyi2018/mini-mlir.git --depth 1
-cd mini-mlir/mini-mlir
 source mini_envsetup.sh
 ./build.sh
 ```
 
 ### how to run examples
 ```
-cd example
-cd vit
+cd example/vit
 python torch2onnx.sh
 sh onnx2mlir.sh
 sh top2tosa.sh
