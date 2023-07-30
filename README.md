@@ -19,6 +19,14 @@ sh llvmir2out.sh
 sh cpu_infer.sh
 ```
 
+#### 注意点
+* 编译整个Vit流程耗时非常长！！时间在1~2小时内，为了简化流程，这里使用的是Vit模型中的一个block。如果想要跑全模型，请将example/vit/torch2onnx.py的28、29行取消注释。第27行注释掉。
+
+```python
+#x = self.model.vit.encoder.layer[0](x)[0]
+for layer in self.model.vit.encoder.layer:
+   x = layer(x)[0]
+```
 
 ---------------------------------------------------------------------
 ### 版本变更
