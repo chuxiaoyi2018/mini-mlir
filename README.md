@@ -13,7 +13,7 @@ source mini_envsetup.sh
 cd example/vit
 python torch2onnx.sh
 sh onnx2mlir.sh
-sh top2tosa.sh
+sh mlir2tosa.sh
 sh tosa2llvmir.sh
 sh llvmir2out.sh
 sh cpu_infer.sh
@@ -65,9 +65,24 @@ https://github.com/chuxiaoyi2018/mini-mlir/releases/tag/mini-mlir
 【版本改动】
 * 做了一个代码的重构，使得目录更为清晰简洁
 
+
+#### 截至20230807:
+* 目前进展：
+1. 支持VIT所有算子的前端转换
+2. 支持VIT所有算子下降到FP32
+3. 支持VIT部分算子下降到NT8（不支持的用FP32）
+4. 支持VIT最终下降到x86架构，FP32余弦相似度在0.99，INT8相似度在0.86
+
+* 未完成的工作
+1. top层前向推理（之前我觉得这个不重要，但是做量化的时候是用这个）
+2. layergroup
+3. INT8大算子量化，softmax，layernorm，conv算子量化
+4. PTQ方式优化，VIT存在奇异值，目前方式是暴力法，阈值大于10的不量化
+5. 下降到其他后端，例如nvidia arm
+6. 写一个新的dialect，因为决赛就是新dialect
+7. 全流程实现，目前是一张图测试，还需要前处理后处理以及输出结果
+
 --------------------------------------------
-
-
 
 
 #### TODO List:
@@ -78,3 +93,4 @@ https://github.com/chuxiaoyi2018/mini-mlir/releases/tag/mini-mlir
 * 完成tpu-mlir里面的run\_calibration功能
 * 将weight-reorder在pass里面完成，而不是放到OnnxConvert中
 * 下降到arm、nvdia后端
+
