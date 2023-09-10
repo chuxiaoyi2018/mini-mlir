@@ -59,11 +59,11 @@ def model_inference_cpu(objfile: str,
     lib4 = "-lm"
     cflag = "-fPIC"
     
-    cfile = "/workspace/mini-mlir/mini-mlir/capi/runtime_cpu.c"
+    cfile = "/workspace/mini-mlir/capi/runtime_cpu.c"
     model = objfile
-    lib1 = "/workspace/mini-mlir/mini-mlir/capi/lib/libmlir_c_runner_utils.so.17git"
-    lib2 = "/workspace/mini-mlir/mini-mlir/capi/lib/libmlir_runner_utils.so.17git"
-    lib3 = "/workspace/mini-mlir/mini-mlir/capi/lib/libmlir_float16_utils.so.17git"
+    lib1 = "/workspace/mini-mlir/capi/lib/libmlir_c_runner_utils.so.17git"
+    lib2 = "/workspace/mini-mlir/capi/lib/libmlir_runner_utils.so.17git"
+    lib3 = "/workspace/mini-mlir/capi/lib/libmlir_float16_utils.so.17git"
     lib4 = "-lm"
     cflag = "-fPIC"
     
