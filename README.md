@@ -11,7 +11,7 @@ source mini_envsetup.sh
 ### how to run examples
 ```
 cd example/vit
-python torch2onnx.sh
+python torch2onnx.py
 sh onnx2mlir.sh
 sh mlir2tosa.sh
 sh tosa2llvmir.sh
