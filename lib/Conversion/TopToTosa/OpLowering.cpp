@@ -753,35 +753,69 @@ void LayerNormLowering::Lowering(PatternRewriter &rewriter,
   auto constop =
       rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr);
 
+  // Mean
   // MulOp
   auto mul_op_0 = rewriter.create<mlir::tosa::MulOp>(
-      op->getLoc(), outType, reducesum->getResult(0), constop->getResult(0),
+      op->getLoc(), out_type, reducesum->getResult(0), constop->getResult(0),
       rewriter.getI32IntegerAttr(0));
 
   // SubOp
   auto sub_op = rewriter.create<mlir::tosa::SubOp>(
       op->getLoc(), outType, op->getOperand(0), mul_op_0->getResult(0));
 
-  // RsqrtOp
-  auto rsqrt = rewriter.create<mlir::tosa::RsqrtOp>(op->getLoc(), outType,
-                                                    op->getOperand(0));
+  // ConstOp for PowOp
+  std::vector<float> const_value_pow = {2};
+  DenseElementsAttr attr_pow = DenseElementsAttr::get(
+      const_ty, llvm::ArrayRef(const_value_pow.data(), const_value_pow.size()));
+  auto constop_pow =
+      rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr_pow);
+
+  // PowOp
+  auto pow_op = rewriter.create<mlir::tosa::PowOp>(
+      op->getLoc(), outType, sub_op->getResult(0), constop_pow->getResult(0));
+      
+  // ReduceSumOp
+  auto reducesum_op_2 = rewriter.create<mlir::tosa::ReduceSumOp>(
+      op->getLoc(), out_type, pow_op->getResult(0), attrs);
 
   // MulOp
   auto mul_op_1 = rewriter.create<mlir::tosa::MulOp>(
-      op->getLoc(), outType, rsqrt->getResult(0), op->getOperand(1),
+      op->getLoc(), out_type, reducesum_op_2->getResult(0), constop->getResult(0),
       rewriter.getI32IntegerAttr(0));
+
+  // Epsilon
+  // ConstOp for AddOp
+  float eps = op->getAttr("eps").cast<FloatAttr>().getValueAsDouble();
+  std::vector<float> const_value_add = {eps};
+  DenseElementsAttr attr_add = DenseElementsAttr::get(
+      const_ty, llvm::ArrayRef(const_value_add.data(), const_value_add.size()));
+  auto constop_add =
+      rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr_add);
+
+  // AddOp
+  auto add_op_0 = rewriter.create<mlir::tosa::AddOp>(
+      op->getLoc(), out_type, mul_op_1->getResult(0), constop_add->getResult(0));
+
+  // Var
+  // RsqrtOp
+  auto rsqrt_op = rewriter.create<mlir::tosa::RsqrtOp>(op->getLoc(), out_type, add_op_0->getResult(0));
 
   // MulOp
   auto mul_op_2 = rewriter.create<mlir::tosa::MulOp>(
-      op->getLoc(), outType, mul_op_1->getResult(0), sub_op->getResult(0),
+      op->getLoc(), outType, sub_op->getResult(0), rsqrt_op->getResult(0),
+      rewriter.getI32IntegerAttr(0));
+
+  // MulOp
+  auto mul_op_3 = rewriter.create<mlir::tosa::MulOp>(
+      op->getLoc(), outType, mul_op_2->getResult(0), op->getOperand(1),
       rewriter.getI32IntegerAttr(0));
 
   // AddOp
-  auto add_op = rewriter.create<mlir::tosa::AddOp>(
-      op->getLoc(), outType, mul_op_2->getResult(0), op->getOperand(2));
+  auto add_op_1 = rewriter.create<mlir::tosa::AddOp>(
+      op->getLoc(), outType, mul_op_3->getResult(0), op->getOperand(2));
 
   // Output
-  rewriter.replaceOp(op, add_op->getResults());
+  rewriter.replaceOp(op, add_op_1->getResults());
 }
 
 } // namespace mini_mlir
