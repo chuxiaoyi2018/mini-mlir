@@ -86,11 +86,14 @@ https://github.com/chuxiaoyi2018/mini-mlir/releases/tag/mini-mlir
 
 
 #### TODO List:
-* xmake
+* ~~xmake~~
 * fastgelu
 * layergroup
 * 完全softmax、layernorm、conv等大算子的下降
 * 完成tpu-mlir里面的run\_calibration功能
 * 将weight-reorder在pass里面完成，而不是放到OnnxConvert中
 * 下降到arm、nvdia后端
-
+* 使用pdll来简化代码
+* 重构代码，解决ConvPermute的问题
+* 支持baby-llama
+* 做类似profile的性能分析工具
