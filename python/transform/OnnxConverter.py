@@ -125,7 +125,6 @@ class OnnxConverter(BaseConverter):
             "Softmax": lambda node: self.convert_softmax_op(node),
             "Transpose": lambda node: self.convert_transpose_op(node),
             "Pow": lambda node: self.convert_pow_op(node),
-            "Reshape": lambda node: self.convert_reshape_op(node),
             "LayerNormalization": lambda node: self.convert_layer_norm_op(node),
         }
 
@@ -494,12 +493,13 @@ class OnnxConverter(BaseConverter):
         operands = list()
         A = onnx_node.inputs[0]
         B = onnx_node.inputs[1]
+        O = onnx_node.outputs[0]
         A_shape = self.getShape(A)
         B_shape = self.getShape(B)
+        O_shape = self.getShape(O)
 
         in_op = self.getOperand(A)
-        operands.append(in_op)
-
+        
         # reorder for tosa
         if self.chip == "cpu":
             if alpha == 1 and beta == 1 and trans_a == 0 and trans_b == 0 and len(A_shape) == 3 and len(B_shape) == 2:
@@ -507,12 +507,23 @@ class OnnxConverter(BaseConverter):
                 weight = self.tensors[B]
                 self.tensors[B] = weight.reshape(1, B_shape[0], B_shape[1])
                 self.shapes[B] = self.tensors[B].shape
+            elif len(A_shape) == 2 and len(B_shape) == 2:
+                op = self.getOperand(onnx_node.inputs[0])
+                p = {
+                    'name': "{}_{}".format(onnx_node.name, onnx_node.op_type)
+                }
+                in_op = self.mlir.create_reshape_op([op], [1] + A_shape, **p)
+                weight = self.tensors[B]
+                self.tensors[B] = weight.reshape(1, B_shape[0], B_shape[1])
+                self.shapes[B] = self.tensors[B].shape
+                self.shapes[O] = [1] + O_shape
+        operands.append(in_op)
 
         if self.isWeight(B):
             if trans_b == 1 or alpha != 1:
                 _tensor = self.getWeight(B)
                 if trans_b == 1:
-                    _tensor = np.ascontiguousarray(np.transpose(_tensor, (1, 0)))
+                    _tensor = np.ascontiguousarray(np.transpose(_tensor, (0, 2, 1)))
                 if alpha != 1:
                     _tensor *= alpha
                 B += '_fix'
@@ -520,9 +531,15 @@ class OnnxConverter(BaseConverter):
             operands.append(self.getWeightOp(B))
         else:
             operands.append(self.getOperand(B))
+
         if len(onnx_node.inputs) > 2 and beta != 0:
             C = onnx_node.inputs[2]
+            C_shape = self.getShape(C)
             if self.isWeight(C):
+                if len(C_shape) == 2:
+                    weight = self.tensors[C]
+                    self.tensors[C] = weight.reshape(1, 1, C_shape[0])
+                    self.shapes[C] = self.tensors[C].shape
                 if beta != 1:
                     _tensor = self.getWeight(C)
                     _tensor *= beta
@@ -535,8 +552,14 @@ class OnnxConverter(BaseConverter):
             operands.append(self.mlir.none_op)
 
         p = {'name': "{}_{}".format(onnx_node.name, onnx_node.op_type), 'do_relu': False}
-        output_shape = self.getShape(onnx_node.name)
+        output_shape = self.shapes[O]
         new_op = self.mlir.create_matmul_op(operands, output_shape, **p)
+
+        if len(A_shape) == 2 and len(B_shape) == 2:
+            p = {
+                'name': "{}_{}".format(onnx_node.name, onnx_node.op_type)
+            }
+            new_op = self.mlir.create_reshape_op([new_op], O_shape, **p)
         self.addOperand(onnx_node.name, new_op)
 
     def convert_global_maxpool_op(self, onnx_node):
