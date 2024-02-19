@@ -13,6 +13,7 @@ class Top:
     ConvPermuteOp = 'top.ConvPermute'
     ConcatOp = 'top.Concat'
     ErfOp = 'top.Erf'
+    GatherOp = 'top.Gather'
     GELUOp = 'top.GELU'
     MatMulOp = 'top.MatMul'
     MaxPoolOp = 'top.MaxPool'
@@ -21,11 +22,13 @@ class Top:
     ReduceMeanOp = 'top.ReduceMean'
     ReshapeOp = 'top.Reshape'
     ReluOp = 'top.Relu'
+    SigmoidOp = 'top.Sigmoid'
     SqrtOp = 'top.Sqrt'
     SliceOp = 'top.Slice'
     SoftmaxOp = 'top.Softmax'
     PermuteOp = 'top.Permute'
     LayerNormOp = 'top.LayerNorm'
+    RMSNormOp = 'top.RMSNorm'
     
 
 def checkType(obj, type):
@@ -339,6 +342,16 @@ class MLIRImporter(object):
             'eps': FloatAttr.get_f32(kargs['eps'])
         }
         return self.buildOp(Top.LayerNormOp, operands, [output_type], **param)
+    
+    def create_rms_norm_op(self, operands, output_shape, **kargs):
+        output_type = self.get_tensor_type(output_shape)        
+        param = {
+            'name': StringAttr.get(kargs['name']),
+            'axis': IntegerAttr.get(self.mlir_type['INT32'], kargs['axis']),
+            'normalized_shape': self.ArrayAttr(kargs['normalized_shape']),
+            'eps': FloatAttr.get_f32(kargs['eps'])
+        }
+        return self.buildOp(Top.RMSNormOp, operands, [output_type], **param)
 
     def create_mul_op(self, operands, output_shape, **kargs):
         output_type = self.get_tensor_type(output_shape)
@@ -359,13 +372,25 @@ class MLIRImporter(object):
         output_type = self.get_tensor_type(output_shape)
         param = {
             'name': StringAttr.get(kargs['name']),
-            'offset': self.ArrayAttr(kargs['offset']),
-            'axis': IntegerAttr.get(self.mlir_type['INT32'], kargs['axis']),
             'start_list': self.ArrayAttr(kargs['start_list']),
             'size_list': self.ArrayAttr(kargs['size_list']),
         }
         return self.buildOp(Top.SliceOp, operands, [output_type], **param)
     
+    def create_sigmoid_op(self, operands, output_shape, **kargs):
+        output_type = self.get_tensor_type(output_shape)
+        param = {
+            'name': StringAttr.get(kargs['name']),
+        }
+        return self.buildOp(Top.SigmoidOp, operands, [output_type], **param)
+    
+    def create_gather_op(self, operands, output_shape, **kargs):
+        output_type = self.get_tensor_type(output_shape)
+        param = {
+            'name': StringAttr.get(kargs['name']),
+        }
+        return self.buildOp(Top.GatherOp, operands, [output_type], **param)
+
     def create_gelu_op(self, operands, output_shape, **kargs):
         output_type = self.get_tensor_type(output_shape)
         param = {

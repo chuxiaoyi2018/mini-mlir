@@ -626,6 +626,55 @@ def TorchLayerNormPattern(patterns: list):
         ReformInfo(name="layernorm",
                    src_nodes=[_reducemean_0, _sub, _pow, _reducemean_1, _add_0, _sqrt, _div],
                    dst_nodes=[layernorm]))
+    
+
+############ torch.RMSNorm ############
+def TorchRMSNormPattern(patterns: list):
+    def is_last_dims(x: list):
+        return np.all(np.diff(x) == 1) and x[-1] == -1
+
+    pow_input = OuterNode()
+
+    pow_tensor = OuterNode(tensor_value=2)
+    div_tensor = OuterNode(tensor_value=1)
+    add_0_tensor = OuterNode(attr_name="eps")
+
+    _pow = PatternNode("Pow", [pow_input, pow_tensor])
+    _reducemean_1 = PatternNode(
+        "ReduceMean",
+        [_pow],
+        ['axes'],
+        attrcheck=AttrCheck(attrs=["axes"], func=is_last_dims),
+    )
+    _add_0 = PatternNode("Add", [_reducemean_1, add_0_tensor])
+    _sqrt = PatternNode("Sqrt", [_add_0])
+    _div = PatternNode("Div", [div_tensor, _sqrt])
+    mul = PatternNode("Mul", [_div, pow_input])
+
+    epsilon_attrfunc = AttrFunctor([add_0_tensor], ["eps"])
+    axis_attrfunc = AttrFunctor([_reducemean_1], ["axes"], lambda x: x[0])
+
+    # affine (have both weight and bias)
+    rmsnorm_aff = PatternNode("RMSNormalization", [pow_input],
+                                attrmap={
+                                    "epsilon": epsilon_attrfunc,
+                                    "axis": axis_attrfunc
+                                })
+    patterns.append(
+        ReformInfo(
+            name="rmsnorm_aff",
+            src_nodes=[_pow, _reducemean_1, _add_0, _sqrt, _div, mul],
+            dst_nodes=[rmsnorm_aff]))
+    # without affine (do not have both weight and bias)
+    rmsnorm = PatternNode("RMSNormalization", [pow_input],
+                            attrmap={
+                                "epsilon": epsilon_attrfunc,
+                                "axis": axis_attrfunc
+                            })
+    patterns.append(
+        ReformInfo(name="rmsnorm",
+                   src_nodes=[_pow, _reducemean_1, _add_0, _sqrt, _div],
+                   dst_nodes=[rmsnorm]))
 
 ############ torch.GELU ############
 def TorchGELUPattern(patterns: list):
@@ -691,6 +740,7 @@ def onnx_opt(model, dump=False, rigorous=True):
     # add your patterns here if you expect that your patterns actually works
     pattern_functions = [
         TorchLayerNormPattern,
+        TorchRMSNormPattern,
         TorchGELUPattern,
         TorchConvPermutePattern
     ]

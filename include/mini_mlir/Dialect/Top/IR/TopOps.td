@@ -218,6 +218,25 @@ def Top_LayerNormOp : Top_Op<"LayerNorm"> {
   //let hasCanonicalizer = 1;
 }
 
+def Top_RMSNormOp : Top_Op<"RMSNorm"> {
+  let summary = "RMSNorm operation";
+  let description = [{
+    layer normalization
+  }];
+  let arguments = (ins
+    AnyTensor:$input,
+    // AnyTensorOrNone:$weight,
+    // AnyTensorOrNone:$bias,
+    I64ArrayAttr:$normalized_shape,
+    I32Attr:$axis,
+    F32Attr:$eps
+  );
+  let results = (outs
+    AnyTensor:$output
+  );
+  //let hasCanonicalizer = 1;
+}
+
 def Top_TransposeOp: Top_Op<"Transpose"> {
 
   let summary = "Transpose operator";
@@ -383,15 +402,8 @@ def Top_SliceOp: Top_Op<"Slice"> {
 
   let arguments = (
     ins AnyTensor:$input,
-    I64ArrayAttr:$offset,
-    I32Attr:$axis,
     I64ArrayAttr:$start_list,
     I64ArrayAttr:$size_list
-    // AnyTensorOrNone:$endsT,
-    // AnyTensorOrNone:$stepsT,
-    // I64ArrayAttr:$offset,
-    // I64ArrayAttr:$steps,
-    // I64ArrayAttr:$ends
   );
   let results = (outs AnyTensor:$output);
   //let hasCanonicalizer = 1;
@@ -508,6 +520,18 @@ def Top_ErfOp : Top_Op<"Erf"> {
   let arguments = (ins
     AnyTensor:$input
   );
+  let results = (outs AnyTensor:$output);
+}
+
+def Top_SigmoidOp : Top_Op<"Sigmoid"> {
+  let summary = " Sigmoid operator,  1.0/(1.0 + exp(-v))";
+  let description = [{
+     Y = 1.0/(1.0 + exp(-v))
+  }];
+  let arguments = (
+    ins AnyTensor:$input
+  );
+
   let results = (outs AnyTensor:$output);
 }
 

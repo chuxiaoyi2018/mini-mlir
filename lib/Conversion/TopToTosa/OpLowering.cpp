@@ -22,7 +22,9 @@ void populateTopToTosaConversionPatterns(RewritePatternSet *patterns) {
         GELULowering,
         SliceLowering,
         ConvPermuteLowering,
-        LayerNormLowering
+        LayerNormLowering,
+        RMSNormLowering,
+        SigmoidLowering
       // clang-format on
       >(patterns->getContext());
 }
@@ -816,6 +818,104 @@ void LayerNormLowering::Lowering(PatternRewriter &rewriter,
 
   // Output
   rewriter.replaceOp(op, add_op_1->getResults());
+}
+
+//===------------------------------------------------------------===//
+// RMSNormLowering
+//===------------------------------------------------------------===//
+void RMSNormLowering::Lowering(PatternRewriter &rewriter,
+                                 top::RMSNormOp op) const {
+  assert(op->getNumResults() == 1);
+  // auto newType = change_dataformat(op->getResult(0).getType());
+  auto outType = op->getResult(0).getType();
+  auto size = outType.cast<RankedTensorType>().getShape().size();
+  int32_t new_axis, axis = op.getAxis();
+
+  if (axis > 0)
+    new_axis = axis;
+  else
+    new_axis = size + axis;
+
+  // Params
+  std::vector<NamedAttribute> attrs;
+  attrs.push_back(
+      rewriter.getNamedAttr("axis", rewriter.getI64IntegerAttr(new_axis)));
+  std::vector<int64_t> out_shape(outType.cast<RankedTensorType>().getShape());
+  out_shape[new_axis] = 1;
+  auto out_type = RankedTensorType::get(
+      out_shape, outType.cast<RankedTensorType>().getElementType());
+
+  // ConstOp
+  auto inType = op->getOperand(0).getType();
+  std::vector<int64_t> in_shape(inType.cast<RankedTensorType>().getShape());
+  std::vector<float> const_value;
+  const_value.push_back(1. / in_shape[new_axis]);
+  std::vector<int64_t> const_shape;
+  for (int i = 0; i < size; i++) {
+    const_shape.push_back(1);
+  }
+  auto const_ty = RankedTensorType::get(const_shape, rewriter.getF32Type());
+  DenseElementsAttr attr = DenseElementsAttr::get(
+      const_ty, llvm::ArrayRef(const_value.data(), const_value.size()));
+  auto constop =
+      rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr);
+
+  // ConstOp for PowOp
+  std::vector<float> const_value_pow = {2};
+  DenseElementsAttr attr_pow = DenseElementsAttr::get(
+      const_ty, llvm::ArrayRef(const_value_pow.data(), const_value_pow.size()));
+  auto constop_pow =
+      rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr_pow);
+
+  // PowOp
+  auto pow_op = rewriter.create<mlir::tosa::PowOp>(
+      op->getLoc(), outType, op->getOperand(0), constop_pow->getResult(0));
+      
+  // ReduceSumOp
+  auto reducesum_op = rewriter.create<mlir::tosa::ReduceSumOp>(
+      op->getLoc(), out_type, pow_op->getResult(0), attrs);
+
+  // MulOp
+  auto mul_op_1 = rewriter.create<mlir::tosa::MulOp>(
+      op->getLoc(), out_type, reducesum_op->getResult(0), constop->getResult(0),
+      rewriter.getI32IntegerAttr(0));
+
+  // Epsilon
+  // ConstOp for AddOp
+  float eps = op->getAttr("eps").cast<FloatAttr>().getValueAsDouble();
+  std::vector<float> const_value_add = {eps};
+  DenseElementsAttr attr_add = DenseElementsAttr::get(
+      const_ty, llvm::ArrayRef(const_value_add.data(), const_value_add.size()));
+  auto constop_add =
+      rewriter.create<mlir::tosa::ConstOp>(op->getLoc(), const_ty, attr_add);
+
+  // AddOp
+  auto add_op_0 = rewriter.create<mlir::tosa::AddOp>(
+      op->getLoc(), out_type, mul_op_1->getResult(0), constop_add->getResult(0));
+
+  // Var
+  // RsqrtOp
+  auto rsqrt_op = rewriter.create<mlir::tosa::RsqrtOp>(op->getLoc(), out_type, add_op_0->getResult(0));
+
+  // MulOp
+  auto mul_op_2 = rewriter.create<mlir::tosa::MulOp>(
+      op->getLoc(), outType, op->getOperand(0), rsqrt_op->getResult(0),
+      rewriter.getI32IntegerAttr(0));
+
+  // Output
+  rewriter.replaceOp(op, mul_op_2->getResults());
+}
+
+//===------------------------------------------------------------===//
+// SigmoidLowering
+//===------------------------------------------------------------===//
+void SigmoidLowering::Lowering(PatternRewriter &rewriter,
+                               top::SigmoidOp op) const {
+  assert(op->getNumResults() == 1);
+  auto outType = op->getResult(0).getType();
+  auto outShape = outType.cast<RankedTensorType>().getShape();
+  rewriter.replaceOpWithNewOp<mlir::tosa::SigmoidOp>(
+      op, outType, op->getOperand(0));
 }
 
 } // namespace mini_mlir

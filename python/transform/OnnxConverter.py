@@ -120,12 +120,16 @@ class OnnxConverter(BaseConverter):
             "Relu": lambda node: self.convert_relu_op(node),
             "Reshape": lambda node: self.convert_reshape_op(node),
             "Slice": lambda node: self.convert_slice_op(node),
+            "Sigmoid": lambda node: self.convert_sigmoid_op(node),
+            "Squeeze": lambda node: self.convert_squeeze_op(node),
+            "Unsqueeze": lambda node: self.convert_unsqueeze_op(node),
             "Sqrt": lambda node: self.convert_sqrt_op(node),
             "Split": lambda node: self.convert_split_op(node),
             "Softmax": lambda node: self.convert_softmax_op(node),
             "Transpose": lambda node: self.convert_transpose_op(node),
             "Pow": lambda node: self.convert_pow_op(node),
             "LayerNormalization": lambda node: self.convert_layer_norm_op(node),
+            "RMSNormalization": lambda node: self.convert_rms_norm_op(node),
         }
 
     def __del__(self):
@@ -655,6 +659,26 @@ class OnnxConverter(BaseConverter):
         }
         new_op = self.mlir.create_reshape_op([op], output_shape, **p)
         self.addOperand(onnx_node.name, new_op)
+
+    def convert_squeeze_op(self, onnx_node):
+        assert (onnx_node.op_type == "Squeeze")
+        op = self.getOperand(onnx_node.inputs[0])
+        output_shape = self.getShape(onnx_node.name)
+        p = {
+            'name': "{}_{}".format(onnx_node.name, onnx_node.op_type)
+        }
+        new_op = self.mlir.create_reshape_op([op], output_shape, **p)
+        self.addOperand(onnx_node.name, new_op)
+
+    def convert_unsqueeze_op(self, onnx_node):
+        assert (onnx_node.op_type == "Unsqueeze")
+        op = self.getOperand(onnx_node.inputs[0])
+        output_shape = self.getShape(onnx_node.name)
+        p = {
+            'name': "{}_{}".format(onnx_node.name, onnx_node.op_type)
+        }
+        new_op = self.mlir.create_reshape_op([op], output_shape, **p)
+        self.addOperand(onnx_node.name, new_op)
     
     def convert_softmax_op(self, onnx_node):
         assert (onnx_node.op_type in ("Softmax"))
@@ -761,7 +785,7 @@ class OnnxConverter(BaseConverter):
 
             scale_opd = self.getWeightOp(onnx_node.inputs[1])
             bias_opd = self.getWeightOp(onnx_node.inputs[2])
-        elif len(onnx_node) == 1:
+        elif len(onnx_node.inputs) == 1:
             scale_opd = self.mlir.none_op
             bias_opd = self.mlir.none_op
         else:
@@ -775,6 +799,53 @@ class OnnxConverter(BaseConverter):
             'eps': eps,
         }
         out_op = self.mlir.create_layer_norm_op([input_opd, scale_opd, bias_opd], output_shape, **p)
+        self.addOperand(onnx_node.name, out_op)
+
+    def convert_rms_norm_op(self, onnx_node):
+        assert (onnx_node.op_type == "RMSNormalization")
+        assert (len(onnx_node.inputs) <= 3)
+        input_shape = self.getShape(onnx_node.inputs[0])
+        num_dims = len(input_shape)
+        axis = onnx_node.attrs.get("axis", -1)
+        if axis < 0:
+            axis += num_dims
+        normalized_shape = input_shape[axis:]
+        eps = onnx_node.attrs.get("epsilon", 1e-05)
+        if type(eps) == list and len(eps) == 1:
+            eps = eps[0]
+        # stash_type is not important
+        wb_shape = [1 if i < axis else input_shape[i] for i in range(num_dims)]
+        size = len(self.getShape(onnx_node.inputs[0]))
+
+        input_opd = self.getOperand(onnx_node.inputs[0])
+
+        if len(onnx_node.inputs) == 3:
+            inner_dim = self.getShape(onnx_node.inputs[1])[0]
+            new_shape = [inner_dim if s == inner_dim else 1 for s in input_shape]
+            scale_weight = self.getWeight(onnx_node.inputs[1]).reshape(new_shape)
+            self.tensors[onnx_node.inputs[1]] = scale_weight
+            self.shapes[onnx_node.inputs[1]] = scale_weight.shape
+
+            bias_weight = self.getWeight(onnx_node.inputs[2]).reshape(new_shape)
+            self.tensors[onnx_node.inputs[2]] = bias_weight
+            self.shapes[onnx_node.inputs[2]] = bias_weight.shape
+
+            scale_opd = self.getWeightOp(onnx_node.inputs[1])
+            bias_opd = self.getWeightOp(onnx_node.inputs[2])
+        elif len(onnx_node.inputs) == 1:
+            scale_opd = self.mlir.none_op
+            bias_opd = self.mlir.none_op
+        else:
+            raise ValueError(f"not support rmsnorm when len(onnx_node.inputs) == {len(onnx_node.inputs)}")
+        output_shape = self.getShape(onnx_node.name)
+
+        p = {
+            'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+            'axis': axis,
+            'normalized_shape': normalized_shape,
+            'eps': eps,
+        }
+        out_op = self.mlir.create_rms_norm_op([input_opd], output_shape, **p)
         self.addOperand(onnx_node.name, out_op)
 
 
@@ -797,22 +868,19 @@ class OnnxConverter(BaseConverter):
 
         offset = 0
         # replace the split with slice
+        split_list = self.getWeight(onnx_node.inputs[1]).astype(int)
         for i, name in zip(split, onnx_node.outputs):
             output_shape = list(input_shape)
-            output_shape[axis] = i
-            slice_offset = [0] * num_dims
-            slice_offset[axis] = offset
-            slice_step = [1] * num_dims
-            slice_end = [input_shape[i] for i in range(num_dims)]
-            offset = offset + i
-            slice_end[axis] = offset
+            output_shape[axis] = split_list[i]
+            start_list = list(input_shape)
+            start_list[axis] = offset
+            offset += split_list[i]
             p = {
                 'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
-                'offset': list(slice_offset),
-                'steps': list(slice_step),
-                'ends': list(slice_end),
+                'start_list': list(start_list),
+                'size_list': list(output_shape),
             }
-            new_op = self.mlir.create_slice_op([op]+[self.mlir.none_op]*3, output_shape, **p) 
+            new_op = self.mlir.create_slice_op([op], output_shape, **p)
             self.addOperand(name, new_op)
 
 
@@ -865,15 +933,45 @@ class OnnxConverter(BaseConverter):
                 raise RuntimeError("not support now")
         else:
             raise RuntimeError("not support now")
+        
+    def convert_sigmoid_op(self, onnx_node):
+        # 1.0/(1.0 + exp(-v))
+        assert (onnx_node.op_type == "Sigmoid")
+        assert (len(onnx_node.inputs) == 1)
+        operand = self.getOperand(onnx_node.inputs[0])
+        output_shape = self.getShape(onnx_node.name)
+        p = {
+            'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+        }
+        new_op = self.mlir.create_sigmoid_op([operand], output_shape, **p) 
+        self.addOperand(onnx_node.name, new_op)
 
     def convert_gather_op(self, onnx_node):
         assert (onnx_node.op_type == "Gather")
-        in0 = self.getOperand(onnx_node.inputs[0])
-        in0_shape = self.getShape(onnx_node.inputs[0])
-        out_shape = self.getShape(onnx_node.name)
-        axis = onnx_node.attrs.get('axis', 0)
+        in0 = onnx_node.inputs[0]
+        in1 = onnx_node.inputs[1]
 
-        if self.isScalar(onnx_node.inputs[1]):
+        if self.isWeight(in0):
+            weight = self.getWeight(in0)
+            if len(weight.shape) == 2 and len(in1.shape) == 2:
+                weight = weight.reshape(1, weight.shape)
+            self.addWeight(in0 + "_fix", weight)
+            in0 = self.getWeightOp(in0)
+            in1 = self.getOperand(onnx_node.inputs[1])
+            out_shape = self.getShape(onnx_node.name)
+
+            # add gather
+            p = {
+                'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
+            }
+            new_op = self.mlir.create_gather_op([in0, in1], out_shape, **p)
+            self.addOperand(onnx_node.name, new_op)
+            return
+        elif self.isScalar(onnx_node.inputs[1]):
+            in0 = self.getOperand(onnx_node.inputs[0])
+            in0_shape = self.getShape(onnx_node.inputs[0])
+            out_shape = self.getShape(onnx_node.name)
+            axis = onnx_node.attrs.get('axis', 0)
             start = int(self.getScalar(onnx_node.inputs[1]))
             if len(onnx_node.inputs) >= 3:
                 end = int(self.getScalar(onnx_node.inputs[2]))
@@ -988,8 +1086,9 @@ class OnnxConverter(BaseConverter):
                 weight = weight.reshape(1,1,-1)
             elif len(lhs_shape) == 2 and (len(rhs_shape) == 1 or len(rhs_shape) == 0) and self.chip == "cpu":
                 weight = weight.reshape(1,-1)
+            elif len(lhs_shape) == len(rhs_shape) and self.chip == "cpu":
+                pass
             else:
-                import pdb;pdb.set_trace()
                 raise RuntimeError("not suppport now")
             self.tensors[rhs] = weight
             self.shapes[rhs] = weight.shape
@@ -1001,7 +1100,7 @@ class OnnxConverter(BaseConverter):
             self.addOperand(onnx_node.name, mul_op)
             return
         else:
-            if lhs_shape == rhs_shape:
+            if len(lhs_shape) == len(rhs_shape):
                 op1 = self.getOperand(rhs)
                 p = {
                     'name': "{}_{}".format(onnx_node.name, onnx_node.op_type),
