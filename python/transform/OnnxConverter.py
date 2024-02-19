@@ -273,7 +273,7 @@ class OnnxConverter(BaseConverter):
         for _name in self.output_names:
             output_shapes.append(self.getShape(_name))
         # init importer
-        self.mlir = MLIRImporter(input_shapes, output_shapes, self.weight_file)
+        self.mlir = MLIRImporter(input_shapes, output_shapes, self.weight_file, self.input_types)
 
     def run(self):
         """convert all to mlir"""
@@ -509,7 +509,7 @@ class OnnxConverter(BaseConverter):
             if alpha == 1 and beta == 1 and trans_a == 0 and trans_b == 0 and len(A_shape) == 3 and len(B_shape) == 2:
                 assert A_shape[-1] == B_shape[0]
                 weight = self.tensors[B]
-                self.tensors[B] = weight.reshape(1, B_shape[0], B_shape[1])
+                self.tensors[B] = weight.reshape(1, *B_shape)
                 self.shapes[B] = self.tensors[B].shape
             elif len(A_shape) == 2 and len(B_shape) == 2:
                 op = self.getOperand(onnx_node.inputs[0])
@@ -518,7 +518,7 @@ class OnnxConverter(BaseConverter):
                 }
                 in_op = self.mlir.create_reshape_op([op], [1] + A_shape, **p)
                 weight = self.tensors[B]
-                self.tensors[B] = weight.reshape(1, B_shape[0], B_shape[1])
+                self.tensors[B] = weight.reshape(1, *B_shape)
                 self.shapes[B] = self.tensors[B].shape
                 self.shapes[O] = [1] + O_shape
         operands.append(in_op)
@@ -953,8 +953,9 @@ class OnnxConverter(BaseConverter):
 
         if self.isWeight(in0):
             weight = self.getWeight(in0)
-            if len(weight.shape) == 2 and len(in1.shape) == 2:
-                weight = weight.reshape(1, weight.shape)
+            if len(weight.shape) == 2 and len(self.getShape(in1)) == 2:
+                self.tensors[in0] = weight.reshape(1, *weight.shape)
+                self.shapes[in0] = self.tensors[in0].shape
             self.addWeight(in0 + "_fix", weight)
             in0 = self.getWeightOp(in0)
             in1 = self.getOperand(onnx_node.inputs[1])

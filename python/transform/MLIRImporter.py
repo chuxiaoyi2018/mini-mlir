@@ -122,6 +122,8 @@ class MLIRImporter(object):
             return self.mlir_type['INT8']
         elif _type == "ui8":
             return self.mlir_type['UINT8']
+        elif _type == "i32":
+            return self.mlir_type['INT32']
         else:
             raise RuntimeError("No support {}".format(_type))
 
