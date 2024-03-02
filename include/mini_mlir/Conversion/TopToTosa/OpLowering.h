@@ -32,5 +32,6 @@ OpLowering(ConvPermute)
 OpLowering(LayerNorm)
 OpLowering(RMSNorm)
 OpLowering(Sigmoid)
+OpLowering(Gather)
 // clang-format on
 } // namespace mini_mlir
